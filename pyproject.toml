@@ -4,7 +4,10 @@ version = "0.1.0"
 description = "Pipeline RAG con búsqueda híbrida, citas y evaluación sobre la documentación de FastAPI en español"
 readme = "README.md"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = [
+    "pymupdf>=1.28.2",
+    "trafilatura>=2.3.1",
+]
 
 [build-system]
 requires = ["uv_build>=0.13.0,<0.14.0"]
