@@ -19,3 +19,16 @@ class Chunk:
     page: int | None
     section: str | None  # ruta de encabezados, p. ej. "Guía > Instalación"
     position: int  # orden dentro del documento
+
+
+@dataclass(frozen=True)
+class RetrievedChunk:
+    chunk: Chunk
+    score: float  # mayor = más relevante; la escala depende de quién lo recuperó
+
+
+@dataclass(frozen=True)
+class LLMResult:
+    text: str
+    tokens_in: int
+    tokens_out: int
