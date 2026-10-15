@@ -5,7 +5,10 @@ description = "Pipeline RAG con búsqueda híbrida, citas y evaluación sobre la
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "chromadb>=1.5.9",
+    "openai>=3.31.0",
     "pymupdf>=1.28.2",
+    "tiktoken>=0.14.0",
     "trafilatura>=2.3.1",
 ]
 
@@ -23,6 +26,8 @@ select = ["E", "F", "I", "UP", "B"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Aviso interno de chromadb en Python 3.14; no es de nuestro código
+filterwarnings = ["ignore::DeprecationWarning:chromadb.*"]
 
 [dependency-groups]
 dev = [

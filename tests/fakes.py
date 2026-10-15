@@ -22,8 +22,10 @@ class FakeEmbedder:
 
     def __init__(self, dimensions: int = 64) -> None:
         self.dimensions = dimensions
+        self.batches: list[list[str]] = []  # cada llamada a embed_documents, para inspeccionarla
 
     def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        self.batches.append(list(texts))
         return [self._embed(text) for text in texts]
 
     def embed_query(self, text: str) -> list[float]:
