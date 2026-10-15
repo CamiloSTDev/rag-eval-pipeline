@@ -1,4 +1,7 @@
 from types import SimpleNamespace
+from typing import cast
+
+from openai import OpenAI
 
 from rag.infrastructure.embeddings.openai_embed import OpenAIEmbedder, token_counter
 
@@ -17,7 +20,9 @@ class StubEmbeddingsAPI:
 
 def test_embedder_sends_the_model_and_keeps_the_input_order():
     api = StubEmbeddingsAPI()
-    embedder = OpenAIEmbedder(SimpleNamespace(embeddings=api), "text-embedding-3-small")
+    # cast: el falso solo imita client.embeddings, que es lo único que usa el adaptador
+    client = cast(OpenAI, SimpleNamespace(embeddings=api))
+    embedder = OpenAIEmbedder(client, "text-embedding-3-small")
 
     vectors = embedder.embed_documents(["a", "b", "c"])
 

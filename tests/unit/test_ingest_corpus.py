@@ -17,7 +17,9 @@ def count_words(text: str) -> int:
     return len(text.split())
 
 
-def make_ingest(embedder, store, batch_size=100):
+def make_ingest(
+    embedder: FakeEmbedder, store: FakeVectorStore, batch_size: int = 100
+) -> IngestCorpus:
     config = ChunkingConfig(max_tokens=50, overlap_tokens=5)
     return IngestCorpus(embedder, store, count_words, config, batch_size=batch_size)
 

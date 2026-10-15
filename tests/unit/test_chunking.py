@@ -1,7 +1,7 @@
 import pytest
 
 from rag.domain.chunking import chunk_document
-from rag.domain.models import Document
+from rag.domain.models import Chunk, Document
 
 
 def count_words(text: str) -> int:
@@ -62,11 +62,13 @@ def test_each_chunk_starts_with_the_end_of_the_previous_one():
     assert all(any(sentence in chunk.text for chunk in chunks) for sentence in SENTENCES)
 
 
-def test_same_document_gives_same_chunks_with_unique_ids():
-    sizes = {"max_tokens": 20, "overlap_tokens": 5, "count_tokens": count_words}
+def chunk_small(document: Document) -> list[Chunk]:
+    return chunk_document(document, max_tokens=20, overlap_tokens=5, count_tokens=count_words)
 
-    first = chunk_document(LONG_DOCUMENT, **sizes)
-    second = chunk_document(LONG_DOCUMENT, **sizes)
+
+def test_same_document_gives_same_chunks_with_unique_ids():
+    first = chunk_small(LONG_DOCUMENT)
+    second = chunk_small(LONG_DOCUMENT)
 
     assert first == second
     assert len({chunk.chunk_id for chunk in first}) == len(first)
@@ -74,11 +76,10 @@ def test_same_document_gives_same_chunks_with_unique_ids():
 
 
 def test_chunk_id_depends_on_the_source():
-    sizes = {"max_tokens": 20, "overlap_tokens": 5, "count_tokens": count_words}
     text = " ".join(SENTENCES)
 
-    in_a = chunk_document(Document(text=text, source="a.md"), **sizes)
-    in_b = chunk_document(Document(text=text, source="b.md"), **sizes)
+    in_a = chunk_small(Document(text=text, source="a.md"))
+    in_b = chunk_small(Document(text=text, source="b.md"))
 
     assert [chunk.text for chunk in in_a] == [chunk.text for chunk in in_b]
     assert {chunk.chunk_id for chunk in in_a}.isdisjoint(chunk.chunk_id for chunk in in_b)

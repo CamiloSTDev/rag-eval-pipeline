@@ -29,8 +29,16 @@ testpaths = ["tests"]
 # Aviso interno de chromadb en Python 3.14; no es de nuestro código
 filterwarnings = ["ignore::DeprecationWarning:chromadb.*"]
 
+[tool.mypy]
+files = ["src", "tests"]
+# Revisa también el cuerpo de las funciones sin anotar (los tests), donde se usan los falsos
+check_untyped_defs = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+
 [dependency-groups]
 dev = [
+    "mypy>=2.4.0",
     "pytest>=9.1.1",
     "ruff>=0.17.0",
 ]

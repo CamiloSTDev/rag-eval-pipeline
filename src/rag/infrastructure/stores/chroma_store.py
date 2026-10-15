@@ -1,9 +1,11 @@
 """Índice vectorial persistente en disco con Chroma."""
 
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
 import chromadb
+from chromadb.api.types import PyEmbeddings
 
 from rag.domain.models import Chunk, RetrievedChunk
 
@@ -21,27 +23,30 @@ class ChromaStore:
     def add(self, chunks: list[Chunk], vectors: list[list[float]]) -> None:
         if not chunks:
             return
+        embeddings: PyEmbeddings = list(vectors)
         # upsert y no add: un chunk_id que ya existe se reemplaza, así reingerir no duplica
         self._collection.upsert(
             ids=[chunk.chunk_id for chunk in chunks],
-            embeddings=vectors,
+            embeddings=embeddings,
             documents=[chunk.text for chunk in chunks],
             metadatas=[_metadata(chunk) for chunk in chunks],
         )
 
     def search(self, vector: list[float], k: int) -> list[RetrievedChunk]:
+        query: PyEmbeddings = [vector]
         result = self._collection.query(
-            query_embeddings=[vector],
+            query_embeddings=query,
             n_results=k,
             include=["documents", "metadatas", "distances"],
         )
-        rows = zip(
-            result["ids"][0],
-            result["documents"][0],
-            result["metadatas"][0],
-            result["distances"][0],
-            strict=True,
+        documents, metadatas, distances = (
+            result["documents"],
+            result["metadatas"],
+            result["distances"],
         )
+        if documents is None or metadatas is None or distances is None:
+            raise RuntimeError("Chroma no devolvió los documentos, metadatos o distancias pedidos")
+        rows = zip(result["ids"][0], documents[0], metadatas[0], distances[0], strict=True)
         # Chroma devuelve distancia coseno (0 = idénticos); el puerto pide "mayor = mejor"
         return [
             RetrievedChunk(_chunk(chunk_id, text, metadata), score=1.0 - distance)
@@ -58,7 +63,7 @@ def _metadata(chunk: Chunk) -> dict[str, Any]:
     return metadata
 
 
-def _chunk(chunk_id: str, text: str, metadata: dict[str, Any]) -> Chunk:
+def _chunk(chunk_id: str, text: str, metadata: Mapping[str, Any]) -> Chunk:
     return Chunk(
         chunk_id=chunk_id,
         text=text,
