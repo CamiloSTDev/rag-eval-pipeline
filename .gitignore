@@ -1,0 +1,18 @@
+# Secretos
+.env
+
+# Entorno y cachés de Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+
+# Índices generados por la ingesta (se reconstruyen desde data/raw)
+data/index/
+
+# Instrucciones locales para agentes de IA
+AGENTS.md
+CLAUDE.md

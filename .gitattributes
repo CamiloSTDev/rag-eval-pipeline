@@ -1,0 +1,2 @@
+# Fines de línea LF en todos los sistemas, para que el texto sea idéntico en Windows y en Docker
+* text=auto eol=lf
