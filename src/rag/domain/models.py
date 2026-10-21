@@ -28,6 +28,15 @@ class RetrievedChunk:
 
 
 @dataclass(frozen=True)
+class Citation:
+    n: int  # el número [n] que aparece en el texto de la respuesta
+    chunk_id: str
+    source: str
+    page: int | None
+    section: str | None
+
+
+@dataclass(frozen=True)
 class LLMResult:
     text: str
     tokens_in: int

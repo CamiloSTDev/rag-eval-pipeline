@@ -3000,6 +3000,7 @@ source = { editable = "." }
 dependencies = [
     { name = "chromadb" },
     { name = "openai" },
+    { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "pymupdf" },
     { name = "tiktoken" },
@@ -3017,6 +3018,7 @@ dev = [
 requires-dist = [
     { name = "chromadb", specifier = ">=1.5.9" },
     { name = "openai", specifier = ">=3.31.0" },
+    { name = "pydantic", specifier = ">=2.14.1" },
     { name = "pydantic-settings", specifier = ">=2.16.0" },
     { name = "pymupdf", specifier = ">=1.28.2" },
     { name = "tiktoken", specifier = ">=0.14.0" },
