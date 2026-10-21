@@ -1,5 +1,6 @@
 """Formas de los datos que viajan por el pipeline."""
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 
 
@@ -39,5 +40,17 @@ class Citation:
 @dataclass(frozen=True)
 class LLMResult:
     text: str
+    tokens_in: int
+    tokens_out: int
+
+
+@dataclass(frozen=True)
+class Answer:
+    text: str
+    citations: tuple[Citation, ...]
+    invalid_citations: tuple[int, ...]  # números [n] sin fuente detrás: señal de invención
+    refused: bool
+    retrieved: tuple[RetrievedChunk, ...]  # el contexto que vio el modelo, para evaluar
+    latency_ms: Mapping[str, float]  # por etapa: "retrieve", "generate"
     tokens_in: int
     tokens_out: int

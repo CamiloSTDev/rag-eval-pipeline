@@ -95,7 +95,9 @@ class FakeReranker:
 class FakeLLM:
     """Responde siempre lo mismo y anota cada llamada para que los tests la inspeccionen."""
 
-    def __init__(self, reply: str = "Respuesta de prueba [1].") -> None:
+    def __init__(
+        self, reply: str = '{"answer": "Respuesta de prueba [1].", "refused": false}'
+    ) -> None:
         self.reply = reply
         self.calls: list[tuple[str, str]] = []
 
