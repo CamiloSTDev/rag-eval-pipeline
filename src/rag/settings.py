@@ -1,6 +1,7 @@
 """Configuración leída de las variables de entorno y del archivo .env."""
 
 from pathlib import Path
+from typing import Literal
 
 from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -20,3 +21,11 @@ class Settings(BaseSettings):
     corpus_path: Path = Path("data/raw")
     corpus_exclude: list[str] = ["_llm-test.md", "translation-banner.md"]
     index_path: Path = Path("data/index")
+    top_k_final: int = 5
+    refusal_threshold: float | None = None
+
+    # Generación: OpenAI usa OPENAI_API_KEY; DeepSeek, DEEPSEEK_API_KEY
+    llm_provider: Literal["openai", "deepseek"] = "openai"
+    llm_model: str | None = None
+    llm_base_url: str | None = None  # solo si quieres otro servidor compatible
+    deepseek_api_key: SecretStr | None = None

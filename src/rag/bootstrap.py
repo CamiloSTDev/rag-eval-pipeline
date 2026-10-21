@@ -2,14 +2,19 @@
 
 from openai import OpenAI
 
-from rag.application.config import ChunkingConfig
+from rag.application.config import ChunkingConfig, RetrievalConfig
+from rag.application.use_cases.answer_question import AnswerQuestion
 from rag.application.use_cases.ingest_corpus import IngestCorpus
 from rag.application.use_cases.search_chunks import SearchChunks
 from rag.domain.models import Document
 from rag.infrastructure.embeddings.openai_embed import OpenAIEmbedder, token_counter
+from rag.infrastructure.llm.openai_compatible import OpenAICompatibleLLM
 from rag.infrastructure.loaders import load_corpus
 from rag.infrastructure.stores.chroma_store import ChromaStore
 from rag.settings import Settings
+
+# base_url por proveedor; None = el servidor por defecto del SDK (OpenAI)
+_LLM_BASE_URLS = {"openai": None, "deepseek": "https://api.deepseek.com"}
 
 
 class ConfigurationError(Exception):
@@ -31,6 +36,13 @@ def build_search_chunks(settings: Settings) -> SearchChunks:
     return SearchChunks(_embedder(settings), _store(settings))
 
 
+def build_answer_question(settings: Settings) -> AnswerQuestion:
+    config = RetrievalConfig(
+        top_k_final=settings.top_k_final, refusal_threshold=settings.refusal_threshold
+    )
+    return AnswerQuestion(_embedder(settings), _store(settings), _llm(settings), config)
+
+
 def collection_name(settings: Settings) -> str:
     # Una colección por modelo y chunking: cambiar cualquiera no mezcla chunks viejos y nuevos
     return f"{settings.embedding_model}-{settings.chunk_tokens}-{settings.chunk_overlap}"
@@ -47,3 +59,20 @@ def _embedder(settings: Settings) -> OpenAIEmbedder:
 
 def _store(settings: Settings) -> ChromaStore:
     return ChromaStore(settings.index_path, collection_name(settings))
+
+
+def _llm(settings: Settings) -> OpenAICompatibleLLM:
+    if settings.llm_model is None:
+        raise ConfigurationError(
+            "Falta LLM_MODEL en .env: el nombre exacto del modelo, según la documentación "
+            "de tu proveedor."
+        )
+    if settings.llm_provider == "openai":
+        key, variable = settings.openai_api_key, "OPENAI_API_KEY"
+    else:
+        key, variable = settings.deepseek_api_key, "DEEPSEEK_API_KEY"
+    if key is None:
+        raise ConfigurationError(f"Falta {variable} en .env para usar {settings.llm_provider}.")
+    base_url = settings.llm_base_url or _LLM_BASE_URLS[settings.llm_provider]
+    client = OpenAI(api_key=key.get_secret_value(), base_url=base_url)
+    return OpenAICompatibleLLM(client, settings.llm_model)
