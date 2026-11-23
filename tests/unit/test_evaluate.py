@@ -1,5 +1,7 @@
 import pytest
 
+from rag.application.judge import Judgement
+from rag.application.ports import ProviderError
 from rag.application.prompts import REFUSAL, InvalidLLMOutput
 from rag.application.use_cases.evaluate import Evaluate, QuestionResult, summarize
 from rag.domain.models import Answer, Chunk, GoldenQuestion, RetrievedChunk, SourceRef
@@ -22,6 +24,7 @@ def answer(retrieved: tuple[RetrievedChunk, ...], refused: bool = False) -> Answ
         invalid_citations=(),
         refused=refused,
         retrieved=retrieved,
+        context=tuple(result.chunk for result in retrieved[:5]),
         top_similarity=0.5,
         latency_ms={"retrieve": 100.0, "generate": 900.0},
         tokens_in=2000,
@@ -102,6 +105,35 @@ def test_an_unreadable_model_output_is_recorded_and_left_out_of_the_metrics():
     assert results[0].error is not None
     assert (summary.questions, summary.errors) == (2, 1)
     assert summary.hit_at_5 == 1.0
+
+
+def test_a_provider_failure_is_recorded_like_an_unreadable_output():
+    def down(text: str) -> Answer:
+        raise ProviderError("sin conexión")
+
+    [result] = Evaluate(down)([question("first")])
+
+    assert result.error == "sin conexión"
+
+
+def test_the_judge_scores_answers_and_its_failures_keep_the_other_metrics():
+    def judge(text: str, answer: Answer) -> Judgement | None:
+        if answer.refused:
+            return None
+        if text == "pregunta third":
+            raise InvalidLLMOutput("el juez no devolvió JSON")
+        return Judgement(faithfulness=0.5, relevant=True, unsupported_claims=("dato inventado",))
+
+    results = Evaluate(lambda text: ANSWERS[text], judge=judge)(
+        [question("first"), question("third"), question("refused-ok", kind="unanswerable")]
+    )
+    summary = summarize(results)
+
+    assert (results[0].faithfulness, results[0].unsupported_claims) == (0.5, "dato inventado")
+    assert results[1].judge_error is not None and results[1].hit_at_5 == 1
+    assert results[2].faithfulness is None  # un rechazo no se juzga
+    assert (summary.faithfulness, summary.relevance, summary.judged) == (0.5, 1.0, 1)
+    assert summary.judge_errors == 1
 
 
 def test_each_result_is_reported_as_soon_as_it_is_ready():

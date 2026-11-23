@@ -6,6 +6,7 @@ from pathlib import Path
 from openai import OpenAI
 
 from rag.application.config import ChunkingConfig, RetrievalConfig
+from rag.application.judge import JudgeAnswer
 from rag.application.retrieval import Retriever
 from rag.application.use_cases.answer_question import AnswerQuestion
 from rag.application.use_cases.evaluate import Evaluate
@@ -60,8 +61,27 @@ def build_index_size(settings: Settings) -> Callable[[], int]:
     return _store(settings).count
 
 
+def build_judge(settings: Settings) -> JudgeAnswer | None:
+    """El juez de fidelidad, o None si JUDGE_MODEL no está configurado."""
+    if settings.judge_model is None:
+        return None
+    same_model = (settings.judge_provider, settings.judge_model) == (
+        settings.llm_provider,
+        settings.llm_model,
+    )
+    if same_model:
+        # Un modelo que se califica a sí mismo tiende a aprobar sus propios errores
+        raise ConfigurationError(
+            "El juez debe ser un modelo distinto del que genera: "
+            "cambia JUDGE_MODEL o JUDGE_PROVIDER."
+        )
+    return JudgeAnswer(
+        _chat_llm(settings.judge_provider, settings.judge_model, base_url=None, settings=settings)
+    )
+
+
 def build_evaluate(settings: Settings) -> Evaluate:
-    return Evaluate(build_answer_question(settings))
+    return Evaluate(build_answer_question(settings), judge=build_judge(settings))
 
 
 def load_golden_set(settings: Settings, path: Path | None = None) -> list[GoldenQuestion]:
@@ -116,6 +136,8 @@ def run_config(settings: Settings) -> dict[str, object]:
         "refusal_threshold": settings.refusal_threshold,
         "llm_provider": settings.llm_provider,
         "llm_model": settings.llm_model,
+        "judge_provider": settings.judge_provider if settings.judge_model else None,
+        "judge_model": settings.judge_model,
     }
 
 
@@ -168,12 +190,20 @@ def _llm(settings: Settings) -> OpenAICompatibleLLM:
             "Falta LLM_MODEL en .env: el nombre exacto del modelo, según la documentación "
             "de tu proveedor."
         )
-    if settings.llm_provider == "openai":
+    return _chat_llm(
+        settings.llm_provider, settings.llm_model, settings.llm_base_url, settings=settings
+    )
+
+
+def _chat_llm(
+    provider: str, model: str, base_url: str | None, *, settings: Settings
+) -> OpenAICompatibleLLM:
+    """Cliente de chat para el generador o el juez: misma API, cambian la clave y la base_url."""
+    if provider == "openai":
         key, variable = settings.openai_api_key, "OPENAI_API_KEY"
     else:
         key, variable = settings.deepseek_api_key, "DEEPSEEK_API_KEY"
     if key is None:
-        raise ConfigurationError(f"Falta {variable} en .env para usar {settings.llm_provider}.")
-    base_url = settings.llm_base_url or _LLM_BASE_URLS[settings.llm_provider]
-    client = OpenAI(api_key=key.get_secret_value(), base_url=base_url)
-    return OpenAICompatibleLLM(client, settings.llm_model)
+        raise ConfigurationError(f"Falta {variable} en .env para usar {provider}.")
+    client = OpenAI(api_key=key.get_secret_value(), base_url=base_url or _LLM_BASE_URLS[provider])
+    return OpenAICompatibleLLM(client, model)

@@ -7,7 +7,7 @@ from rag.application.ports import LLMClient
 from rag.application.prompts import REFUSAL, SYSTEM_PROMPT, build_user_prompt, parse_llm_answer
 from rag.application.retrieval import Retrieval, Retriever
 from rag.domain.citations import resolve_citations
-from rag.domain.models import Answer
+from rag.domain.models import Answer, Chunk
 
 
 class AnswerQuestion:
@@ -23,7 +23,7 @@ class AnswerQuestion:
 
         if self._not_enough_context(retrieval):
             # Sin contexto suficiente no se llama al modelo: no se gasta y no hay nada que inventar
-            return _refusal(retrieval, latency, tokens_in=0, tokens_out=0)
+            return _refusal(retrieval, [], latency, tokens_in=0, tokens_out=0)
 
         sources = [result.chunk for result in retrieval.ranking[: self._config.top_k_final]]
         start = time.perf_counter()
@@ -32,7 +32,7 @@ class AnswerQuestion:
 
         parsed = parse_llm_answer(result.text)
         if parsed.refused or parsed.answer.strip() == REFUSAL:
-            return _refusal(retrieval, latency, result.tokens_in, result.tokens_out)
+            return _refusal(retrieval, sources, latency, result.tokens_in, result.tokens_out)
 
         citations, invalid = resolve_citations(parsed.answer, sources)
         return Answer(
@@ -41,6 +41,7 @@ class AnswerQuestion:
             invalid_citations=tuple(invalid),
             refused=False,
             retrieved=tuple(retrieval.ranking),
+            context=tuple(sources),
             top_similarity=retrieval.top_similarity,
             latency_ms=latency,
             tokens_in=result.tokens_in,
@@ -56,7 +57,11 @@ class AnswerQuestion:
 
 
 def _refusal(
-    retrieval: Retrieval, latency: dict[str, float], tokens_in: int, tokens_out: int
+    retrieval: Retrieval,
+    context: list[Chunk],
+    latency: dict[str, float],
+    tokens_in: int,
+    tokens_out: int,
 ) -> Answer:
     return Answer(
         text=REFUSAL,
@@ -64,6 +69,7 @@ def _refusal(
         invalid_citations=(),
         refused=True,
         retrieved=tuple(retrieval.ranking),
+        context=tuple(context),
         top_similarity=retrieval.top_similarity,
         latency_ms=latency,
         tokens_in=tokens_in,

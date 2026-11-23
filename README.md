@@ -80,6 +80,8 @@ uv run rag eval E0
 
 Guarda `results/E0.csv`, con una fila por pregunta, y `results/E0.json`, con la configuración usada y el resumen: Hit@5, Hit@10, MRR, aciertos de rechazo, citas sin fuente, latencia p50/p95 y tokens. Con `--holdout` evalúa solo las preguntas reservadas.
 
+Con `JUDGE_PROVIDER` y `JUDGE_MODEL` configurados, un segundo modelo actúa como juez y mide la **fidelidad**: qué fracción de las afirmaciones de cada respuesta respaldan sus fuentes. También mide la **relevancia**: si la respuesta contesta la pregunta. El juez debe ser un modelo distinto del que genera. Las afirmaciones sin respaldo quedan en el CSV, para revisar a mano unas 10 respuestas y comprobar que coincides con el juez.
+
 ## Desarrollo
 
 ```

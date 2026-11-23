@@ -4,10 +4,13 @@ import statistics
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
+from rag.application.judge import Judgement
 from rag.application.ports import ProviderError
 from rag.application.prompts import InvalidLLMOutput
 from rag.domain.metrics import hit_at_k, percentile, reciprocal_rank
 from rag.domain.models import Answer, GoldenQuestion, QuestionKind
+
+Judge = Callable[[str, Answer], Judgement | None]
 
 
 @dataclass(frozen=True)
@@ -26,7 +29,12 @@ class QuestionResult:
     tokens_out: int
     latency_ms: float
     answer: str
-    error: str | None = None  # la respuesta del modelo no se pudo leer
+    # Del juez: None si no hay juez, si la respuesta fue un rechazo o si el juez falló
+    faithfulness: float | None = None
+    relevant: bool | None = None
+    unsupported_claims: str = ""  # separadas por " | ", para revisarlas en el CSV
+    judge_error: str | None = None
+    error: str | None = None  # la respuesta del modelo no se pudo obtener o leer
 
 
 @dataclass(frozen=True)
@@ -40,6 +48,10 @@ class Summary:
     false_refusals: int  # tenían respuesta y el sistema se negó
     missed_refusals: int  # no tenían respuesta y el sistema respondió igual
     answers_with_invalid_citations: int
+    faithfulness: float | None  # promedio sobre las respuestas que juzgó el juez
+    relevance: float | None
+    judged: int
+    judge_errors: int
     latency_p50_ms: float | None
     latency_p95_ms: float | None
     tokens_in_mean: float | None
@@ -47,8 +59,11 @@ class Summary:
 
 
 class Evaluate:
-    def __init__(self, answer_question: Callable[[str], Answer]) -> None:
+    def __init__(
+        self, answer_question: Callable[[str], Answer], judge: Judge | None = None
+    ) -> None:
         self._answer_question = answer_question
+        self._judge = judge
 
     def __call__(
         self,
@@ -75,6 +90,13 @@ class Evaluate:
             any(ref.matches(result.chunk) for ref in question.relevant_sources)
             for result in answer.retrieved
         ]
+        judgement, judge_error = None, None
+        if self._judge is not None:
+            try:
+                judgement = self._judge(question.question, answer)
+            except (InvalidLLMOutput, ProviderError) as error:
+                # Si falla el juez se pierde la fidelidad de esta pregunta, no sus otras métricas
+                judge_error = str(error)
         measurable = question.answerable
         return QuestionResult(
             id=question.id,
@@ -90,6 +112,10 @@ class Evaluate:
             tokens_out=answer.tokens_out,
             latency_ms=sum(answer.latency_ms.values()),
             answer=answer.text,
+            faithfulness=judgement.faithfulness if judgement else None,
+            relevant=judgement.relevant if judgement else None,
+            unsupported_claims=" | ".join(judgement.unsupported_claims) if judgement else "",
+            judge_error=judge_error,
         )
 
 
@@ -98,6 +124,7 @@ def summarize(results: Sequence[QuestionResult]) -> Summary:
     métrica."""
     ok = [result for result in results if result.error is None]
     retrieval = [result for result in ok if result.reciprocal_rank is not None]
+    judged = [result for result in ok if result.relevant is not None]
     latencies = [result.latency_ms for result in ok]
     return Summary(
         questions=len(results),
@@ -109,6 +136,10 @@ def summarize(results: Sequence[QuestionResult]) -> Summary:
         false_refusals=sum(r.refused and r.kind != "unanswerable" for r in ok),
         missed_refusals=sum(not r.refused and r.kind == "unanswerable" for r in ok),
         answers_with_invalid_citations=sum(r.invalid_citations > 0 for r in ok),
+        faithfulness=_mean([r.faithfulness for r in judged if r.faithfulness is not None]),
+        relevance=_mean([float(r.relevant) for r in judged if r.relevant is not None]),
+        judged=len(judged),
+        judge_errors=sum(r.judge_error is not None for r in ok),
         latency_p50_ms=percentile(latencies, 50) if latencies else None,
         latency_p95_ms=percentile(latencies, 95) if latencies else None,
         tokens_in_mean=_mean([float(r.tokens_in) for r in ok]),

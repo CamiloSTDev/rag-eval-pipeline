@@ -118,10 +118,15 @@ def _eval(settings: Settings, name: str, golden: Path | None, holdout: bool) -> 
     unverified = sum(not question.verified for question in questions)
     if unverified:
         print(f"Atención: {unverified} preguntas sin revisar a mano (verified=false).")
+    if settings.judge_model:
+        print(f"Juez de fidelidad: {settings.judge_provider} / {settings.judge_model}")
+    else:
+        print("Sin juez: configura JUDGE_MODEL para medir fidelidad y relevancia.")
 
     def progress(result: QuestionResult) -> None:
         status = "error" if result.error else ("ok" if result.refusal_correct else "rechazo mal")
-        print(f"  {result.id}: hit@5={result.hit_at_5} {status}")
+        judged = "" if result.faithfulness is None else f" fidelidad={result.faithfulness:.2f}"
+        print(f"  {result.id}: hit@5={result.hit_at_5} {status}{judged}")
 
     results = evaluate(questions, on_result=progress)
     summary = summarize(results)
@@ -208,6 +213,9 @@ def _format_summary(summary: Summary) -> str:
             f"{summary.false_refusals} · de menos {summary.missed_refusals}",
             f"Citas          respuestas con citas sin fuente: "
             f"{summary.answers_with_invalid_citations}",
+            f"Generación     fidelidad {value(summary.faithfulness)} · relevancia "
+            f"{value(summary.relevance)} ({summary.judged} juzgadas, "
+            f"{summary.judge_errors} errores del juez)",
             f"Operación      latencia p50 {value(summary.latency_p50_ms, 0)} ms · p95 "
             f"{value(summary.latency_p95_ms, 0)} ms · tokens promedio "
             f"{value(summary.tokens_in_mean, 0)} entrada / "
