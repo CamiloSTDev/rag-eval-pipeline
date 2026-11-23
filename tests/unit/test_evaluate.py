@@ -22,6 +22,7 @@ def answer(retrieved: tuple[RetrievedChunk, ...], refused: bool = False) -> Answ
         invalid_citations=(),
         refused=refused,
         retrieved=retrieved,
+        top_similarity=0.5,
         latency_ms={"retrieve": 100.0, "generate": 900.0},
         tokens_in=2000,
         tokens_out=50,

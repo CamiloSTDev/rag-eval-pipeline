@@ -4,9 +4,10 @@ import pytest
 
 from rag.application.config import RetrievalConfig
 from rag.application.prompts import REFUSAL, SYSTEM_PROMPT, InvalidLLMOutput
+from rag.application.retrieval import Retriever
 from rag.application.use_cases.answer_question import AnswerQuestion
 from rag.domain.models import Chunk, Citation
-from tests.fakes import FakeEmbedder, FakeLLM, FakeVectorStore
+from tests.fakes import FakeEmbedder, FakeKeywordIndex, FakeLLM, FakeVectorStore
 
 QUERY_CHUNK = Chunk(
     chunk_id="query",
@@ -31,12 +32,21 @@ def reply(answer: str, refused: bool = False) -> str:
     return json.dumps({"answer": answer, "refused": refused})
 
 
-def make_answer_question(llm: FakeLLM, threshold: float | None = None) -> AnswerQuestion:
+def make_retriever(chunks: list[Chunk], hybrid: bool = False) -> Retriever:
     embedder, store = FakeEmbedder(), FakeVectorStore()
-    chunks = [QUERY_CHUNK, PATH_CHUNK]
     store.add(chunks, embedder.embed_documents([chunk.text for chunk in chunks]))
+    keywords = None
+    if hybrid:
+        keywords = FakeKeywordIndex()
+        keywords.build(chunks)
+    return Retriever(embedder, store, keywords)
+
+
+def make_answer_question(
+    llm: FakeLLM, threshold: float | None = None, hybrid: bool = False
+) -> AnswerQuestion:
     config = RetrievalConfig(top_k_final=2, refusal_threshold=threshold)
-    return AnswerQuestion(embedder, store, llm, config)
+    return AnswerQuestion(make_retriever([QUERY_CHUNK, PATH_CHUNK], hybrid), llm, config)
 
 
 def test_answer_cites_the_retrieved_sources_and_reports_its_cost():
@@ -57,6 +67,7 @@ def test_answer_cites_the_retrieved_sources_and_reports_its_cost():
     assert answer.invalid_citations == ()
     assert not answer.refused
     assert [result.chunk for result in answer.retrieved] == [QUERY_CHUNK, PATH_CHUNK]
+    assert answer.top_similarity == answer.retrieved[0].score
     assert set(answer.latency_ms) == {"retrieve", "generate"}
     assert answer.tokens_in > 0 and answer.tokens_out > 0
     [(system, user)] = llm.calls
@@ -65,12 +76,10 @@ def test_answer_cites_the_retrieved_sources_and_reports_its_cost():
 
 
 def test_the_model_sees_only_the_first_top_k_final_of_the_ranking():
-    embedder, store, llm = FakeEmbedder(), FakeVectorStore(), FakeLLM()
-    chunks = [QUERY_CHUNK, PATH_CHUNK]
-    store.add(chunks, embedder.embed_documents([chunk.text for chunk in chunks]))
+    llm = FakeLLM()
     config = RetrievalConfig(top_k_retrieve=2, top_k_final=1)
 
-    answer = AnswerQuestion(embedder, store, llm, config)(QUESTION)
+    answer = AnswerQuestion(make_retriever([QUERY_CHUNK, PATH_CHUNK]), llm, config)(QUESTION)
 
     assert len(answer.retrieved) == 2  # el ranking completo, para medir Hit@k
     [(_, user)] = llm.calls
@@ -107,11 +116,23 @@ def test_low_retrieval_score_refuses_without_calling_the_model():
     assert set(answer.latency_ms) == {"retrieve"}
 
 
+def test_with_hybrid_search_the_threshold_still_uses_the_vector_similarity():
+    # Los puntajes de RRF no pasan de 2/61 ≈ 0,033: compararlos con 0,3 rechazaría todo
+    llm = FakeLLM()
+
+    answer = make_answer_question(llm, threshold=0.3, hybrid=True)(QUESTION)
+
+    assert answer.retrieved[0].score < 0.05  # el ranking es el fusionado
+    assert answer.top_similarity is not None and answer.top_similarity > 0.3
+    assert not answer.refused
+    assert len(llm.calls) == 1
+
+
 def test_empty_index_refuses_without_calling_the_model():
     llm = FakeLLM()
     config = RetrievalConfig(top_k_final=2)
 
-    answer = AnswerQuestion(FakeEmbedder(), FakeVectorStore(), llm, config)(QUESTION)
+    answer = AnswerQuestion(make_retriever([]), llm, config)(QUESTION)
 
     assert answer.refused
     assert llm.calls == []

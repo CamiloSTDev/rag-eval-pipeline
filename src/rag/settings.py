@@ -25,6 +25,8 @@ class Settings(BaseSettings):
     results_path: Path = Path("results")
     top_k_retrieve: int = 30
     top_k_final: int = 5
+    use_bm25: bool = False  # búsqueda híbrida; apagada en el baseline (E0), se prueba en E3
+    rrf_k: int = 60
     refusal_threshold: float | None = None
 
     # Generación: OpenAI usa OPENAI_API_KEY; DeepSeek, DEEPSEEK_API_KEY

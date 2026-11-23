@@ -5,16 +5,18 @@ from pathlib import Path
 from openai import OpenAI
 
 from rag.application.config import ChunkingConfig, RetrievalConfig
+from rag.application.retrieval import Retriever
 from rag.application.use_cases.answer_question import AnswerQuestion
 from rag.application.use_cases.evaluate import Evaluate
 from rag.application.use_cases.ingest_corpus import IngestCorpus
-from rag.application.use_cases.search_chunks import SearchChunks
+from rag.application.use_cases.search_chunks import SearchChunks, SearchMode
 from rag.domain.models import Document, GoldenQuestion
 from rag.infrastructure.embeddings.openai_embed import OpenAIEmbedder, token_counter
 from rag.infrastructure.golden import GoldenSetError as GoldenSetError
 from rag.infrastructure.golden import load_golden
 from rag.infrastructure.llm.openai_compatible import OpenAICompatibleLLM
 from rag.infrastructure.loaders import load_corpus
+from rag.infrastructure.stores.bm25_index import Bm25Index
 from rag.infrastructure.stores.chroma_store import ChromaStore
 from rag.settings import Settings
 
@@ -37,8 +39,9 @@ def build_ingest_corpus(settings: Settings) -> IngestCorpus:
     )
 
 
-def build_search_chunks(settings: Settings) -> SearchChunks:
-    return SearchChunks(_embedder(settings), _store(settings))
+def build_search_chunks(settings: Settings, mode: SearchMode = "vector") -> SearchChunks:
+    # El índice BM25 solo se arma si el modo lo usa: cuesta leer todos los chunks de Chroma
+    return SearchChunks(_retriever(settings, hybrid=mode != "vector"))
 
 
 def build_answer_question(settings: Settings) -> AnswerQuestion:
@@ -47,7 +50,7 @@ def build_answer_question(settings: Settings) -> AnswerQuestion:
         top_k_final=settings.top_k_final,
         refusal_threshold=settings.refusal_threshold,
     )
-    return AnswerQuestion(_embedder(settings), _store(settings), _llm(settings), config)
+    return AnswerQuestion(_retriever(settings, hybrid=settings.use_bm25), _llm(settings), config)
 
 
 def build_evaluate(settings: Settings) -> Evaluate:
@@ -83,6 +86,8 @@ def run_config(settings: Settings) -> dict[str, object]:
         "chunk_overlap": settings.chunk_overlap,
         "top_k_retrieve": settings.top_k_retrieve,
         "top_k_final": settings.top_k_final,
+        "use_bm25": settings.use_bm25,
+        "rrf_k": settings.rrf_k,
         "refusal_threshold": settings.refusal_threshold,
         "llm_provider": settings.llm_provider,
         "llm_model": settings.llm_model,
@@ -105,6 +110,16 @@ def _embedder(settings: Settings) -> OpenAIEmbedder:
 
 def _store(settings: Settings) -> ChromaStore:
     return ChromaStore(settings.index_path, collection_name(settings))
+
+
+def _retriever(settings: Settings, hybrid: bool) -> Retriever:
+    embedder, store = _embedder(settings), _store(settings)
+    keywords = None
+    if hybrid:
+        # BM25 vive en memoria: se rearma al arrancar con los mismos chunks que tiene Chroma
+        keywords = Bm25Index()
+        keywords.build(store.all_chunks())
+    return Retriever(embedder, store, keywords, rrf_k=settings.rrf_k)
 
 
 def _llm(settings: Settings) -> OpenAICompatibleLLM:

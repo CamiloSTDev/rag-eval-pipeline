@@ -31,6 +31,8 @@ Busca los fragmentos más parecidos a una pregunta:
 uv run rag search "¿Cómo declaro un parámetro de query opcional?"
 ```
 
+Compara las dos ramas de la búsqueda con `--mode vector`, `--mode bm25` (por palabras) o `--mode hybrid` (las dos fusionadas con Reciprocal Rank Fusion). Para que `ask` y `eval` usen la búsqueda híbrida, pon `USE_BM25=true` en `.env`.
+
 Haz una pregunta y recibe una respuesta con citas a la documentación:
 
 ```

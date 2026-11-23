@@ -53,6 +53,7 @@ class Answer:
     refused: bool
     # Ranking completo de la búsqueda; el modelo solo ve los primeros top_k_final
     retrieved: tuple[RetrievedChunk, ...]
+    top_similarity: float | None  # mejor similitud vectorial: la que se compara con el umbral
     latency_ms: Mapping[str, float]  # por etapa: "retrieve", "generate"
     tokens_in: int
     tokens_out: int

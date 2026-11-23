@@ -14,6 +14,7 @@ from pathlib import Path
 from rag import bootstrap
 from rag.application.prompts import InvalidLLMOutput
 from rag.application.use_cases.evaluate import QuestionResult, Summary, summarize
+from rag.application.use_cases.search_chunks import SearchMode
 from rag.domain.models import Answer, RetrievedChunk
 from rag.settings import Settings
 
@@ -29,6 +30,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     search = commands.add_parser("search", help="muestra los chunks más parecidos a una consulta")
     search.add_argument("query", help="la pregunta o búsqueda, entre comillas")
     search.add_argument("-k", type=int, default=5, help="cuántos chunks mostrar (por defecto 5)")
+    search.add_argument(
+        "--mode",
+        choices=["vector", "bm25", "hybrid"],
+        default="vector",
+        help="rama vectorial, por palabras (BM25) o las dos fusionadas con RRF",
+    )
     ask = commands.add_parser("ask", help="responde una pregunta citando la documentación")
     ask.add_argument("question", help="la pregunta, entre comillas")
     evaluate = commands.add_parser("eval", help="mide el sistema con el golden set")
@@ -44,7 +51,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.command == "ingest":
             _ingest(settings)
         elif args.command == "search":
-            _search(settings, args.query, args.k)
+            _search(settings, args.query, args.k, args.mode)
         elif args.command == "ask":
             _ask(settings, args.question)
         else:
@@ -68,10 +75,14 @@ def _ingest(settings: Settings) -> None:
     )
 
 
-def _search(settings: Settings, query: str, k: int) -> None:
-    results = bootstrap.build_search_chunks(settings)(query, k)
+def _search(settings: Settings, query: str, k: int, mode: SearchMode) -> None:
+    results = bootstrap.build_search_chunks(settings, mode)(query, k, mode)
     if not results:
-        print("El índice está vacío: corre primero `rag ingest`.")
+        print(
+            "Ningún chunk comparte palabras con la consulta."
+            if mode == "bm25"
+            else "El índice está vacío: corre primero `rag ingest`."
+        )
     for rank, result in enumerate(results, start=1):
         print(_format_result(rank, result))
 
@@ -137,11 +148,11 @@ def _format_answer(answer: Answer) -> str:
     if answer.invalid_citations:
         numbers = ", ".join(f"[{n}]" for n in answer.invalid_citations)
         lines.append(f"Atención: citas sin fuente {numbers}")
-    best = f"{answer.retrieved[0].score:.3f}" if answer.retrieved else "sin resultados"
+    best = "sin resultados" if answer.top_similarity is None else f"{answer.top_similarity:.3f}"
     stages = " · ".join(f"{stage} {ms:.0f} ms" for stage, ms in answer.latency_ms.items())
     lines += [
         "",
-        f"Mejor puntaje de búsqueda: {best} · tokens {answer.tokens_in} entrada / "
+        f"Mejor similitud vectorial: {best} · tokens {answer.tokens_in} entrada / "
         f"{answer.tokens_out} salida · {stages}",
     ]
     return "\n".join(lines)
