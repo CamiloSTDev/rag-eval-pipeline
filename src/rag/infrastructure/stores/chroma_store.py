@@ -53,6 +53,18 @@ class ChromaStore:
             for chunk_id, text, metadata, distance in rows
         ]
 
+    def all_chunks(self) -> list[Chunk]:
+        """Todos los chunks guardados, en orden estable: con ellos se arma el índice BM25."""
+        result = self._collection.get(include=["documents", "metadatas"])
+        documents, metadatas = result["documents"], result["metadatas"]
+        if documents is None or metadatas is None:
+            raise RuntimeError("Chroma no devolvió los documentos o metadatos pedidos")
+        chunks = [
+            _chunk(chunk_id, text, metadata)
+            for chunk_id, text, metadata in zip(result["ids"], documents, metadatas, strict=True)
+        ]
+        return sorted(chunks, key=lambda chunk: (chunk.source, chunk.page or 0, chunk.position))
+
 
 def _metadata(chunk: Chunk) -> dict[str, Any]:
     metadata: dict[str, Any] = {"source": chunk.source, "position": chunk.position}

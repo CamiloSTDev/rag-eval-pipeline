@@ -28,6 +28,17 @@ def test_search_returns_nearest_first_with_cosine_similarity_and_metadata(tmp_pa
     assert results[1].score == pytest.approx(0.0, abs=1e-6)
 
 
+def test_all_chunks_returns_everything_stored_in_a_stable_order(tmp_path):
+    store = ChromaStore(tmp_path, "prueba")
+    second = Chunk(chunk_id="b", text="dos", source="a.md", page=None, section=None, position=1)
+    first = Chunk(chunk_id="a", text="uno", source="a.md", page=None, section="S", position=0)
+    other = Chunk(chunk_id="c", text="tres", source="b.md", page=2, section=None, position=0)
+
+    store.add([other, second, first], [[1.0, 0.0], [0.0, 1.0], [1.0, 1.0]])
+
+    assert store.all_chunks() == [first, second, other]
+
+
 def test_adding_an_existing_chunk_id_replaces_it(tmp_path):
     store = ChromaStore(tmp_path, "prueba")
     chunk = make_chunk("a")

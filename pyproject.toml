@@ -10,6 +10,7 @@ dependencies = [
     "pydantic>=2.14.1",
     "pydantic-settings>=2.16.0",
     "pymupdf>=1.28.2",
+    "rank-bm25>=0.2.2",
     "tiktoken>=0.14.0",
     "trafilatura>=2.3.1",
 ]
@@ -40,6 +41,11 @@ files = ["src", "tests"]
 check_untyped_defs = true
 warn_unused_ignores = true
 warn_redundant_casts = true
+
+[[tool.mypy.overrides]]
+# rank_bm25 no trae anotaciones de tipos
+module = ["rank_bm25"]
+ignore_missing_imports = true
 
 [dependency-groups]
 dev = [
