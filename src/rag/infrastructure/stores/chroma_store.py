@@ -53,6 +53,9 @@ class ChromaStore:
             for chunk_id, text, metadata, distance in rows
         ]
 
+    def count(self) -> int:
+        return self._collection.count()
+
     def all_chunks(self) -> list[Chunk]:
         """Todos los chunks guardados, en orden estable: con ellos se arma el índice BM25."""
         result = self._collection.get(include=["documents", "metadatas"])

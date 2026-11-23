@@ -41,6 +41,21 @@ Haz una pregunta y recibe una respuesta con citas a la documentación:
 uv run rag ask "¿Cómo declaro un parámetro de query opcional?"
 ```
 
+## API
+
+```
+uv run uvicorn rag.interfaces.api:app
+```
+
+| Endpoint | Qué hace |
+| --- | --- |
+| `POST /ask` | Recibe `{"question": "..."}` (1 a 1.000 caracteres) y devuelve la respuesta, sus citas, las citas sin fuente, si rechazó, la similitud vectorial, la latencia por etapa y los tokens |
+| `POST /ingest` | Reingesta el corpus configurado. Exige el header `X-Admin-Key` con el valor de `ADMIN_API_KEY`; sin esa variable, el endpoint está desactivado |
+| `GET /health` | `200` con la cantidad de chunks indexados, o `503` si el índice está vacío |
+| `GET /version` | Versión del paquete, configuración activa y un hash corto de ella |
+
+Errores: `422` si la pregunta no es válida, `503` si el índice está vacío y `502` si falla el proveedor del modelo o devuelve una respuesta ilegible. La documentación interactiva queda en `/docs`.
+
 ## Evaluación
 
 El golden set va en `data/eval/golden.jsonl`, una pregunta por línea en JSON. Hay un ejemplo en [data/eval/golden.example.jsonl](data/eval/golden.example.jsonl). Cada línea lleva:

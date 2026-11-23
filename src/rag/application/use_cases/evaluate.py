@@ -4,6 +4,7 @@ import statistics
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
+from rag.application.ports import ProviderError
 from rag.application.prompts import InvalidLLMOutput
 from rag.domain.metrics import hit_at_k, percentile, reciprocal_rank
 from rag.domain.models import Answer, GoldenQuestion, QuestionKind
@@ -66,8 +67,8 @@ class Evaluate:
     def _evaluate(self, question: GoldenQuestion) -> QuestionResult:
         try:
             answer = self._answer_question(question.question)
-        except InvalidLLMOutput as error:
-            # Una respuesta ilegible no debe tirar abajo una corrida de 50 preguntas
+        except (InvalidLLMOutput, ProviderError) as error:
+            # Una respuesta ilegible o un corte del proveedor no deben tirar abajo la corrida
             return _failed(question, str(error))
 
         relevant = [

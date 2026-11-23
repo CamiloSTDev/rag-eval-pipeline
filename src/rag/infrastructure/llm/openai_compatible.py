@@ -1,7 +1,9 @@
 """Cliente de chat con el formato de la API de OpenAI: sirve para OpenAI y para DeepSeek."""
 
+import openai
 from openai import OpenAI
 
+from rag.application.ports import ProviderError
 from rag.domain.models import LLMResult
 
 
@@ -13,16 +15,20 @@ class OpenAICompatibleLLM:
         self._temperature = temperature
 
     def generate(self, system: str, user: str) -> LLMResult:
-        response = self._client.chat.completions.create(
-            model=self._model,
-            messages=[
-                {"role": "system", "content": system},
-                {"role": "user", "content": user},
-            ],
-            temperature=self._temperature,
-            # Modo JSON: la respuesta es un objeto JSON válido (DeepSeek exige "json" en el prompt)
-            response_format={"type": "json_object"},
-        )
+        try:
+            # El SDK ya reintenta con espera creciente los errores transitorios (red, 429, 5xx)
+            response = self._client.chat.completions.create(
+                model=self._model,
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user},
+                ],
+                temperature=self._temperature,
+                # Modo JSON: la respuesta es un JSON válido (DeepSeek pide "json" en el prompt)
+                response_format={"type": "json_object"},
+            )
+        except openai.APIError as error:
+            raise ProviderError(f"Falló el proveedor del LLM ({self._model}): {error}") from error
         usage = response.usage
         return LLMResult(
             text=response.choices[0].message.content or "",

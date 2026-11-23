@@ -13,6 +13,7 @@ from datetime import datetime
 from pathlib import Path
 
 from rag import bootstrap
+from rag.application.ports import ProviderError
 from rag.application.prompts import InvalidLLMOutput
 from rag.application.use_cases.evaluate import QuestionResult, Summary, summarize
 from rag.application.use_cases.search_chunks import SearchMode
@@ -69,7 +70,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     except (bootstrap.ConfigurationError, bootstrap.GoldenSetError, CommandError) as error:
         print(error, file=sys.stderr)
         return 2
-    except InvalidLLMOutput as error:
+    except (InvalidLLMOutput, ProviderError) as error:
         print(error, file=sys.stderr)
         return 1
     return 0

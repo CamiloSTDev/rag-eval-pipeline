@@ -34,3 +34,6 @@ class Settings(BaseSettings):
     llm_model: str | None = None
     llm_base_url: str | None = None  # solo si quieres otro servidor compatible
     deepseek_api_key: SecretStr | None = None
+
+    # API: sin clave de administrador, POST /ingest queda desactivado
+    admin_api_key: SecretStr | None = None

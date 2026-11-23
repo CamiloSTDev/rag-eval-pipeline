@@ -1,5 +1,6 @@
 """Único lugar que conoce las clases concretas: crea los adaptadores y arma los casos de uso."""
 
+from collections.abc import Callable
 from pathlib import Path
 
 from openai import OpenAI
@@ -52,6 +53,11 @@ def build_answer_question(settings: Settings) -> AnswerQuestion:
         refusal_threshold=settings.refusal_threshold,
     )
     return AnswerQuestion(_retriever(settings, hybrid=settings.use_bm25), _llm(settings), config)
+
+
+def build_index_size(settings: Settings) -> Callable[[], int]:
+    """Cuántos chunks tiene el índice, para saber si la API puede responder."""
+    return _store(settings).count
 
 
 def build_evaluate(settings: Settings) -> Evaluate:

@@ -5,6 +5,14 @@ from typing import Protocol
 from rag.domain.models import Chunk, LLMResult, RetrievedChunk
 
 
+class ProviderError(Exception):
+    """Falló un servicio externo (embeddings o LLM): conexión, autenticación, límite de uso.
+
+    Los adaptadores traducen a esta excepción los errores de su librería, así la API y la
+    CLI pueden manejarlos sin saber si detrás está OpenAI, DeepSeek u otro proveedor.
+    """
+
+
 class Embedder(Protocol):
     """Convierte texto en vectores. Documentos y consultas deben pasar por el mismo modelo."""
 
