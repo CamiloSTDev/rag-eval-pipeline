@@ -19,6 +19,7 @@ class _SourceRow(BaseModel):
     source: str
     section: str | None = None
     page: int | None = None
+    evidence: str | None = None
 
 
 class _QuestionRow(BaseModel):
@@ -30,6 +31,7 @@ class _QuestionRow(BaseModel):
     relevant_sources: list[_SourceRow] = []
     type: Literal["single", "multi", "unanswerable"]
     holdout: bool = False
+    verified: bool = False
 
     @model_validator(mode="after")
     def sources_match_the_type(self) -> Self:
@@ -61,10 +63,12 @@ def load_golden(path: Path) -> list[GoldenQuestion]:
                 question=row.question,
                 reference_answer=row.reference_answer,
                 relevant_sources=tuple(
-                    SourceRef(ref.source, ref.section, ref.page) for ref in row.relevant_sources
+                    SourceRef(ref.source, ref.section, ref.page, ref.evidence)
+                    for ref in row.relevant_sources
                 ),
                 kind=row.type,
                 holdout=row.holdout,
+                verified=row.verified,
             )
         )
     return questions

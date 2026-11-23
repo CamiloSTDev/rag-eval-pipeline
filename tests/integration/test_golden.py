@@ -1,7 +1,11 @@
+import json
+
 import pytest
 
+from rag import bootstrap
 from rag.domain.models import GoldenQuestion, SourceRef
 from rag.infrastructure.golden import GoldenSetError, load_golden
+from rag.settings import Settings
 
 VALID = """\
 {"id": "q001", "question": "¿Cómo hago opcional un query?", "reference_answer": "Con None.", \
@@ -60,6 +64,66 @@ def test_errors_point_to_the_line_and_the_problem(tmp_path, line, problem):
 
     with pytest.raises(GoldenSetError, match=f"(?s)línea 2.*{problem}"):
         load_golden(path)
+
+
+CORPUS_PAGE = """\
+# Parámetros de Query { #query-parameters }
+
+## Parámetros opcionales { #optional }
+
+Puedes declarar parámetros opcionales estableciendo su valor por defecto en `None`.
+"""
+
+
+def check_against_corpus(tmp_path, *sources: dict) -> list[GoldenQuestion]:
+    corpus = tmp_path / "raw"
+    corpus.mkdir()
+    (corpus / "query.md").write_text(CORPUS_PAGE, encoding="utf-8")
+    row = {
+        "id": "q1",
+        "question": "?",
+        "reference_answer": "r",
+        "type": "single",
+        "relevant_sources": list(sources),
+    }
+    golden = tmp_path / "golden.jsonl"
+    golden.write_text(json.dumps(row, ensure_ascii=False), encoding="utf-8")
+    # Los valores explícitos tienen prioridad sobre .env, así el test no depende de él
+    settings = Settings(corpus_path=corpus, corpus_exclude=[], golden_path=golden)
+    return bootstrap.load_golden_set(settings)
+
+
+def test_sources_sections_and_quotes_that_match_the_clean_corpus_pass(tmp_path):
+    [question] = check_against_corpus(
+        tmp_path,
+        {
+            "source": "query.md",
+            "section": "Parámetros de Query > Parámetros opcionales",
+            "evidence": "estableciendo su valor  por defecto en `None`",  # espacios: da igual
+        },
+    )
+
+    assert question.relevant_sources[0].evidence is not None
+
+
+@pytest.mark.parametrize(
+    ("ref", "problem"),
+    [
+        ({"source": "otro.md"}, "no es un documento"),
+        ({"source": "query.md", "section": "Parámetros opcionales"}, "no existe la sección"),
+        (
+            {
+                "source": "query.md",
+                "section": "Parámetros de Query > Parámetros opcionales",
+                "evidence": "con un valor por defecto de cero",
+            },
+            "la cita no está",
+        ),
+    ],
+)
+def test_mismatches_with_the_corpus_are_reported(tmp_path, ref, problem):
+    with pytest.raises(GoldenSetError, match=problem):
+        check_against_corpus(tmp_path, ref)
 
 
 def test_repeated_ids_are_rejected(tmp_path):

@@ -6,6 +6,7 @@ import csv
 import json
 import sys
 import time
+from collections import Counter
 from collections.abc import Sequence
 from dataclasses import asdict, fields
 from datetime import datetime
@@ -44,6 +45,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     evaluate.add_argument(
         "--holdout", action="store_true", help="solo las preguntas de hold-out (úsalo al final)"
     )
+    golden = commands.add_parser(
+        "golden", help="valida el golden set contra el corpus (no necesita claves)"
+    )
+    golden.add_argument("--golden", type=Path, help="otro archivo de golden set")
+    golden.add_argument(
+        "--show", action="store_true", help="muestra cada pregunta con su respuesta y sus citas"
+    )
     args = parser.parse_args(argv)
 
     settings = Settings()
@@ -54,8 +62,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             _search(settings, args.query, args.k, args.mode)
         elif args.command == "ask":
             _ask(settings, args.question)
-        else:
+        elif args.command == "eval":
             _eval(settings, args.name, args.golden, args.holdout)
+        else:
+            _golden(settings, args.golden, args.show)
     except (bootstrap.ConfigurationError, bootstrap.GoldenSetError, CommandError) as error:
         print(error, file=sys.stderr)
         return 2
@@ -104,6 +114,9 @@ def _eval(settings: Settings, name: str, golden: Path | None, holdout: bool) -> 
     if not questions:
         group = "de hold-out" if holdout else "fuera del hold-out"
         raise CommandError(f"El golden set no tiene preguntas {group}.")
+    unverified = sum(not question.verified for question in questions)
+    if unverified:
+        print(f"Atención: {unverified} preguntas sin revisar a mano (verified=false).")
 
     def progress(result: QuestionResult) -> None:
         status = "error" if result.error else ("ok" if result.refusal_correct else "rechazo mal")
@@ -126,6 +139,29 @@ def _eval(settings: Settings, name: str, golden: Path | None, holdout: bool) -> 
     }
     json_path.write_text(json.dumps(run, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"\n{_format_summary(summary)}\n\nGuardado en {csv_path} y {json_path}")
+
+
+def _golden(settings: Settings, golden: Path | None, show: bool) -> None:
+    questions = bootstrap.load_golden_set(settings, golden)
+    for question in questions if show else []:
+        flags = [question.kind] + ["hold-out"] * question.holdout + ["revisada"] * question.verified
+        print(f"{question.id} ({', '.join(flags)}) {question.question}")
+        print(f"  Respuesta: {question.reference_answer}")
+        for ref in question.relevant_sources:
+            print(
+                f"  Fuente: {ref.source.split('/', 1)[-1]} | {ref.section or '(todo el archivo)'}"
+            )
+            if ref.evidence:
+                print(f'    "{ref.evidence}"')
+        print()
+    kinds = Counter(question.kind for question in questions)
+    holdout = sum(question.holdout for question in questions)
+    unverified = sum(not question.verified for question in questions)
+    print(
+        f"Golden set válido: {len(questions)} preguntas ({kinds['single']} de un chunk, "
+        f"{kinds['multi']} de varios, {kinds['unanswerable']} sin respuesta), "
+        f"{holdout} de hold-out, {unverified} sin revisar a mano."
+    )
 
 
 def _format_result(rank: int, result: RetrievedChunk) -> str:

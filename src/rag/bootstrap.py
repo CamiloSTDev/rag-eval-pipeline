@@ -10,6 +10,7 @@ from rag.application.use_cases.answer_question import AnswerQuestion
 from rag.application.use_cases.evaluate import Evaluate
 from rag.application.use_cases.ingest_corpus import IngestCorpus
 from rag.application.use_cases.search_chunks import SearchChunks, SearchMode
+from rag.domain.chunking import chunk_document
 from rag.domain.models import Document, GoldenQuestion
 from rag.infrastructure.embeddings.openai_embed import OpenAIEmbedder, token_counter
 from rag.infrastructure.golden import GoldenSetError as GoldenSetError
@@ -58,19 +59,37 @@ def build_evaluate(settings: Settings) -> Evaluate:
 
 
 def load_golden_set(settings: Settings, path: Path | None = None) -> list[GoldenQuestion]:
-    """Lee el golden set y comprueba que cada fuente citada exista en el corpus."""
+    """Lee el golden set y lo contrasta con el corpus limpio, tal como lo ve el sistema.
+
+    Cada fuente debe ser un documento del corpus, cada sección debe existir tal cual y cada
+    cita (`evidence`) debe aparecer literalmente en esa sección. Un error de tipeo en
+    cualquiera de las tres daría Hit@k = 0 sin avisar.
+    """
     questions = load_golden(path or settings.golden_path)
-    missing = sorted(
-        {
-            ref.source
-            for question in questions
-            for ref in question.relevant_sources
-            if not (settings.corpus_path / ref.source).is_file()
-        }
-    )
-    if missing:
-        # Una ruta mal escrita daría Hit@k = 0 sin avisar
-        raise GoldenSetError(f"Fuentes que no existen en {settings.corpus_path}: {missing}")
+    documents = {document.source: document for document in load_documents(settings)}
+    sections: dict[str, dict[str | None, str]] = {}  # source -> sección -> texto
+    problems: list[str] = []
+    for question in questions:
+        for ref in question.relevant_sources:
+            document = documents.get(ref.source)
+            if document is None:
+                problems.append(f"{question.id}: {ref.source} no es un documento del corpus")
+                continue
+            if ref.source not in sections:
+                sections[ref.source] = _section_texts(document)
+            if ref.section is not None and ref.section not in sections[ref.source]:
+                problems.append(f"{question.id}: no existe la sección {ref.section!r}")
+                continue
+            if ref.evidence is not None:
+                scope = (
+                    sections[ref.source][ref.section] if ref.section is not None else document.text
+                )
+                if _squeeze(ref.evidence) not in _squeeze(scope):
+                    problems.append(
+                        f"{question.id}: la cita no está en {ref.section or ref.source}"
+                    )
+    if problems:
+        raise GoldenSetError("El golden set no coincide con el corpus:\n- " + "\n- ".join(problems))
     return questions
 
 
@@ -106,6 +125,21 @@ def _embedder(settings: Settings) -> OpenAIEmbedder:
         )
     client = OpenAI(api_key=settings.openai_api_key.get_secret_value())
     return OpenAIEmbedder(client, settings.embedding_model)
+
+
+def _section_texts(document: Document) -> dict[str | None, str]:
+    """Texto de cada sección del documento. Las secciones no dependen del tamaño de chunk,
+    así que un límite enorme y un contador de palabras bastan (y son rápidos)."""
+    texts: dict[str | None, list[str]] = {}
+    for chunk in chunk_document(
+        document, max_tokens=1_000_000, overlap_tokens=0, count_tokens=lambda t: len(t.split())
+    ):
+        texts.setdefault(chunk.section, []).append(chunk.text)
+    return {section: "\n\n".join(parts) for section, parts in texts.items()}
+
+
+def _squeeze(text: str) -> str:
+    return " ".join(text.split())
 
 
 def _store(settings: Settings) -> ChromaStore:

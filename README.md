@@ -44,9 +44,16 @@ uv run rag ask "¿Cómo declaro un parámetro de query opcional?"
 El golden set va en `data/eval/golden.jsonl`, una pregunta por línea en JSON. Hay un ejemplo en [data/eval/golden.example.jsonl](data/eval/golden.example.jsonl). Cada línea lleva:
 
 - `id`, `question` y `reference_answer` (la respuesta verificada a mano).
-- `relevant_sources`: dónde está la respuesta, como lista de `{"source": ..., "section": ...}`. `source` es la ruta dentro de `data/raw`; `section` es la ruta exacta de títulos y es opcional (`page` también, para PDF).
+- `relevant_sources`: dónde está la respuesta, como lista de `{"source": ..., "section": ..., "evidence": ...}`. `source` es la ruta dentro de `data/raw`; `section`, la ruta exacta de títulos (opcional, igual que `page` para PDF); `evidence`, una cita literal que respalda la respuesta (opcional). Si varias secciones responden la pregunta, encontrar cualquiera cuenta como acierto.
 - `type`: `single` (un chunk), `multi` (varios) o `unanswerable` (sin respuesta en el corpus; no lleva `relevant_sources`).
 - `holdout`: `true` en las preguntas que se reservan para la evaluación final.
+- `verified`: `true` cuando una persona revisó la pregunta, la respuesta y sus fuentes.
+
+Valida el golden set contra el corpus limpio, sin necesitar claves. Comprueba que cada fuente, sección y cita exista tal cual; `--show` lo imprime en formato legible para revisarlo:
+
+```
+uv run rag golden --show
+```
 
 Corre una evaluación con un nombre de experimento:
 

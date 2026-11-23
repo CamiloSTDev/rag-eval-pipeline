@@ -66,6 +66,7 @@ class SourceRef:
     source: str
     section: str | None = None
     page: int | None = None
+    evidence: str | None = None  # cita literal de la fuente que respalda la respuesta
 
     def matches(self, chunk: Chunk) -> bool:
         return (
@@ -88,6 +89,7 @@ class GoldenQuestion:
     relevant_sources: tuple[SourceRef, ...]  # vacío en las preguntas sin respuesta
     kind: QuestionKind
     holdout: bool = False  # las de hold-out solo se miran al final, para no sobreajustar
+    verified: bool = False  # una persona revisó la pregunta, la respuesta y sus fuentes
 
     @property
     def answerable(self) -> bool:
