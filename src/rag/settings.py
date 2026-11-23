@@ -21,6 +21,9 @@ class Settings(BaseSettings):
     corpus_path: Path = Path("data/raw")
     corpus_exclude: list[str] = ["_llm-test.md", "translation-banner.md"]
     index_path: Path = Path("data/index")
+    golden_path: Path = Path("data/eval/golden.jsonl")
+    results_path: Path = Path("results")
+    top_k_retrieve: int = 30
     top_k_final: int = 5
     refusal_threshold: float | None = None
 

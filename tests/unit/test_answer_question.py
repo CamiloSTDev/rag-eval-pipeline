@@ -64,6 +64,19 @@ def test_answer_cites_the_retrieved_sources_and_reports_its_cost():
     assert QUERY_CHUNK.text in user and user.endswith(QUESTION)
 
 
+def test_the_model_sees_only_the_first_top_k_final_of_the_ranking():
+    embedder, store, llm = FakeEmbedder(), FakeVectorStore(), FakeLLM()
+    chunks = [QUERY_CHUNK, PATH_CHUNK]
+    store.add(chunks, embedder.embed_documents([chunk.text for chunk in chunks]))
+    config = RetrievalConfig(top_k_retrieve=2, top_k_final=1)
+
+    answer = AnswerQuestion(embedder, store, llm, config)(QUESTION)
+
+    assert len(answer.retrieved) == 2  # el ranking completo, para medir Hit@k
+    [(_, user)] = llm.calls
+    assert QUERY_CHUNK.text in user and PATH_CHUNK.text not in user
+
+
 def test_citations_without_a_source_are_reported():
     llm = FakeLLM(reply("Son opcionales [1], según un dato inventado [9]."))
 

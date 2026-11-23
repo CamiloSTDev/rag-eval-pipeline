@@ -37,6 +37,23 @@ Haz una pregunta y recibe una respuesta con citas a la documentación:
 uv run rag ask "¿Cómo declaro un parámetro de query opcional?"
 ```
 
+## Evaluación
+
+El golden set va en `data/eval/golden.jsonl`, una pregunta por línea en JSON. Hay un ejemplo en [data/eval/golden.example.jsonl](data/eval/golden.example.jsonl). Cada línea lleva:
+
+- `id`, `question` y `reference_answer` (la respuesta verificada a mano).
+- `relevant_sources`: dónde está la respuesta, como lista de `{"source": ..., "section": ...}`. `source` es la ruta dentro de `data/raw`; `section` es la ruta exacta de títulos y es opcional (`page` también, para PDF).
+- `type`: `single` (un chunk), `multi` (varios) o `unanswerable` (sin respuesta en el corpus; no lleva `relevant_sources`).
+- `holdout`: `true` en las preguntas que se reservan para la evaluación final.
+
+Corre una evaluación con un nombre de experimento:
+
+```
+uv run rag eval E0
+```
+
+Guarda `results/E0.csv`, con una fila por pregunta, y `results/E0.json`, con la configuración usada y el resumen: Hit@5, Hit@10, MRR, aciertos de rechazo, citas sin fuente, latencia p50/p95 y tokens. Con `--holdout` evalúa solo las preguntas reservadas.
+
 ## Desarrollo
 
 ```

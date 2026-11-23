@@ -1,15 +1,25 @@
-"""Línea de comandos: `rag ingest` construye el índice, `rag search` lo consulta y `rag ask`
-responde con citas."""
+"""Línea de comandos: `ingest` construye el índice, `search` lo consulta, `ask` responde con
+citas y `eval` mide el sistema con el golden set."""
 
 import argparse
+import csv
+import json
 import sys
 import time
 from collections.abc import Sequence
+from dataclasses import asdict, fields
+from datetime import datetime
+from pathlib import Path
 
 from rag import bootstrap
 from rag.application.prompts import InvalidLLMOutput
+from rag.application.use_cases.evaluate import QuestionResult, Summary, summarize
 from rag.domain.models import Answer, RetrievedChunk
 from rag.settings import Settings
+
+
+class CommandError(Exception):
+    """Un error de uso del comando; el mensaje dice qué hacer."""
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -21,6 +31,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     search.add_argument("-k", type=int, default=5, help="cuántos chunks mostrar (por defecto 5)")
     ask = commands.add_parser("ask", help="responde una pregunta citando la documentación")
     ask.add_argument("question", help="la pregunta, entre comillas")
+    evaluate = commands.add_parser("eval", help="mide el sistema con el golden set")
+    evaluate.add_argument("name", help="nombre de la corrida, por ejemplo E0")
+    evaluate.add_argument("--golden", type=Path, help="otro archivo de golden set")
+    evaluate.add_argument(
+        "--holdout", action="store_true", help="solo las preguntas de hold-out (úsalo al final)"
+    )
     args = parser.parse_args(argv)
 
     settings = Settings()
@@ -29,9 +45,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             _ingest(settings)
         elif args.command == "search":
             _search(settings, args.query, args.k)
-        else:
+        elif args.command == "ask":
             _ask(settings, args.question)
-    except bootstrap.ConfigurationError as error:
+        else:
+            _eval(settings, args.name, args.golden, args.holdout)
+    except (bootstrap.ConfigurationError, bootstrap.GoldenSetError, CommandError) as error:
         print(error, file=sys.stderr)
         return 2
     except InvalidLLMOutput as error:
@@ -62,6 +80,43 @@ def _ask(settings: Settings, question: str) -> None:
     print(_format_answer(bootstrap.build_answer_question(settings)(question)))
 
 
+def _eval(settings: Settings, name: str, golden: Path | None, holdout: bool) -> None:
+    csv_path = settings.results_path / f"{name}.csv"
+    json_path = settings.results_path / f"{name}.json"
+    if csv_path.exists() or json_path.exists():
+        # Sobrescribir borraría en silencio un experimento anterior
+        raise CommandError(
+            f"Ya existe la corrida {name} en {settings.results_path}: usa otro nombre."
+        )
+    evaluate = bootstrap.build_evaluate(settings)
+    questions = [q for q in bootstrap.load_golden_set(settings, golden) if q.holdout == holdout]
+    if not questions:
+        group = "de hold-out" if holdout else "fuera del hold-out"
+        raise CommandError(f"El golden set no tiene preguntas {group}.")
+
+    def progress(result: QuestionResult) -> None:
+        status = "error" if result.error else ("ok" if result.refusal_correct else "rechazo mal")
+        print(f"  {result.id}: hit@5={result.hit_at_5} {status}")
+
+    results = evaluate(questions, on_result=progress)
+    summary = summarize(results)
+
+    settings.results_path.mkdir(parents=True, exist_ok=True)
+    with csv_path.open("w", encoding="utf-8-sig", newline="") as file:  # -sig: Excel lee las tildes
+        writer = csv.DictWriter(file, fieldnames=[field.name for field in fields(QuestionResult)])
+        writer.writeheader()
+        writer.writerows(asdict(result) for result in results)
+    run = {
+        "name": name,
+        "date": datetime.now().isoformat(timespec="seconds"),
+        "split": "holdout" if holdout else "dev",
+        "config": bootstrap.run_config(settings),
+        "summary": asdict(summary),
+    }
+    json_path.write_text(json.dumps(run, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(f"\n{_format_summary(summary)}\n\nGuardado en {csv_path} y {json_path}")
+
+
 def _format_result(rank: int, result: RetrievedChunk) -> str:
     chunk = result.chunk
     preview = " ".join(chunk.text.split())
@@ -90,6 +145,27 @@ def _format_answer(answer: Answer) -> str:
         f"{answer.tokens_out} salida · {stages}",
     ]
     return "\n".join(lines)
+
+
+def _format_summary(summary: Summary) -> str:
+    def value(number: float | None, digits: int = 2) -> str:
+        return "—" if number is None else f"{number:.{digits}f}"
+
+    return "\n".join(
+        [
+            f"Preguntas      {summary.questions} (errores: {summary.errors})",
+            f"Recuperación   Hit@5 {value(summary.hit_at_5)} · Hit@10 {value(summary.hit_at_10)}"
+            f" · MRR {value(summary.mrr)}",
+            f"Rechazo        aciertos {value(summary.refusal_accuracy)} · de más "
+            f"{summary.false_refusals} · de menos {summary.missed_refusals}",
+            f"Citas          respuestas con citas sin fuente: "
+            f"{summary.answers_with_invalid_citations}",
+            f"Operación      latencia p50 {value(summary.latency_p50_ms, 0)} ms · p95 "
+            f"{value(summary.latency_p95_ms, 0)} ms · tokens promedio "
+            f"{value(summary.tokens_in_mean, 0)} entrada / "
+            f"{value(summary.tokens_out_mean, 0)} salida",
+        ]
+    )
 
 
 def _location(source: str, page: int | None) -> str:

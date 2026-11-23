@@ -1,13 +1,18 @@
 """Único lugar que conoce las clases concretas: crea los adaptadores y arma los casos de uso."""
 
+from pathlib import Path
+
 from openai import OpenAI
 
 from rag.application.config import ChunkingConfig, RetrievalConfig
 from rag.application.use_cases.answer_question import AnswerQuestion
+from rag.application.use_cases.evaluate import Evaluate
 from rag.application.use_cases.ingest_corpus import IngestCorpus
 from rag.application.use_cases.search_chunks import SearchChunks
-from rag.domain.models import Document
+from rag.domain.models import Document, GoldenQuestion
 from rag.infrastructure.embeddings.openai_embed import OpenAIEmbedder, token_counter
+from rag.infrastructure.golden import GoldenSetError as GoldenSetError
+from rag.infrastructure.golden import load_golden
 from rag.infrastructure.llm.openai_compatible import OpenAICompatibleLLM
 from rag.infrastructure.loaders import load_corpus
 from rag.infrastructure.stores.chroma_store import ChromaStore
@@ -38,9 +43,50 @@ def build_search_chunks(settings: Settings) -> SearchChunks:
 
 def build_answer_question(settings: Settings) -> AnswerQuestion:
     config = RetrievalConfig(
-        top_k_final=settings.top_k_final, refusal_threshold=settings.refusal_threshold
+        top_k_retrieve=settings.top_k_retrieve,
+        top_k_final=settings.top_k_final,
+        refusal_threshold=settings.refusal_threshold,
     )
     return AnswerQuestion(_embedder(settings), _store(settings), _llm(settings), config)
+
+
+def build_evaluate(settings: Settings) -> Evaluate:
+    return Evaluate(build_answer_question(settings))
+
+
+def load_golden_set(settings: Settings, path: Path | None = None) -> list[GoldenQuestion]:
+    """Lee el golden set y comprueba que cada fuente citada exista en el corpus."""
+    questions = load_golden(path or settings.golden_path)
+    missing = sorted(
+        {
+            ref.source
+            for question in questions
+            for ref in question.relevant_sources
+            if not (settings.corpus_path / ref.source).is_file()
+        }
+    )
+    if missing:
+        # Una ruta mal escrita daría Hit@k = 0 sin avisar
+        raise GoldenSetError(f"Fuentes que no existen en {settings.corpus_path}: {missing}")
+    return questions
+
+
+def run_config(settings: Settings) -> dict[str, object]:
+    """La configuración que define una corrida, para guardarla junto a sus resultados.
+
+    Se eligen los campos uno por uno: las claves de API nunca deben terminar en results/.
+    """
+    return {
+        "collection": collection_name(settings),
+        "embedding_model": settings.embedding_model,
+        "chunk_tokens": settings.chunk_tokens,
+        "chunk_overlap": settings.chunk_overlap,
+        "top_k_retrieve": settings.top_k_retrieve,
+        "top_k_final": settings.top_k_final,
+        "refusal_threshold": settings.refusal_threshold,
+        "llm_provider": settings.llm_provider,
+        "llm_model": settings.llm_model,
+    }
 
 
 def collection_name(settings: Settings) -> str:
