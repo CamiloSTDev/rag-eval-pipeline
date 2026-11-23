@@ -1,5 +1,7 @@
 # RAG con evaluación
 
+[![CI](https://github.com/CamiloSTDev/rag-eval-pipeline/actions/workflows/ci.yml/badge.svg)](https://github.com/CamiloSTDev/rag-eval-pipeline/actions/workflows/ci.yml)
+
 Asistente de preguntas y respuestas sobre la documentación de FastAPI en español, con búsqueda híbrida, citas obligatorias y una evaluación medible que compara configuraciones.
 
 Estado: en construcción (semana 2 de 4). Ya funcionan la ingesta, la búsqueda vectorial y las respuestas con citas por línea de comandos.
