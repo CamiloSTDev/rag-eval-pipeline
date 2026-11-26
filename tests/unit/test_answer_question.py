@@ -86,6 +86,24 @@ def test_the_model_sees_only_the_first_top_k_final_of_the_ranking():
     assert QUERY_CHUNK.text in user and PATH_CHUNK.text not in user
 
 
+def test_the_reranker_decides_which_sources_the_model_sees():
+    class PreferPath:
+        def rerank(self, query, candidates, top_n):
+            return sorted(candidates, key=lambda r: r.chunk.chunk_id != "path")[:top_n]
+
+    llm = FakeLLM()
+    config = RetrievalConfig(top_k_final=1)
+    answer_question = AnswerQuestion(
+        make_retriever([QUERY_CHUNK, PATH_CHUNK]), llm, config, reranker=PreferPath()
+    )
+
+    answer = answer_question(QUESTION)
+
+    assert [r.chunk for r in answer.retrieved] == [PATH_CHUNK, QUERY_CHUNK]
+    assert answer.context == (PATH_CHUNK,)
+    assert "rerank" in answer.latency_ms
+
+
 def test_citations_without_a_source_are_reported():
     llm = FakeLLM(reply("Son opcionales [1], según un dato inventado [9]."))
 

@@ -35,6 +35,8 @@ uv run rag search "¿Cómo declaro un parámetro de query opcional?"
 
 Compara las dos ramas de la búsqueda con `--mode vector`, `--mode bm25` (por palabras) o `--mode hybrid` (las dos fusionadas con Reciprocal Rank Fusion). Para que `ask` y `eval` usen la búsqueda híbrida, pon `USE_BM25=true` en `.env`.
 
+Con `USE_RERANKER=true`, un LLM (por defecto `gpt-4.1-mini`) lee la pregunta y los 20 primeros candidatos de la búsqueda, y los reordena por contenido antes de elegir los que ve el generador.
+
 Haz una pregunta y recibe una respuesta con citas a la documentación:
 
 ```

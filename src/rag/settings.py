@@ -27,6 +27,12 @@ class Settings(BaseSettings):
     top_k_final: int = 5
     use_bm25: bool = False  # búsqueda híbrida; apagada en el baseline (E0), se prueba en E3
     rrf_k: int = 60
+    # Reranker con un LLM: apagado en el baseline, se prueba en E4
+    use_reranker: bool = False
+    reranker_provider: Literal["openai", "deepseek"] = "openai"
+    reranker_model: str = "gpt-4.1-mini"
+    reranker_temperature: float | Literal["default"] = 0.0
+    rerank_candidates: int = 20
     refusal_threshold: float | None = None
 
     # Generación: OpenAI usa OPENAI_API_KEY; DeepSeek, DEEPSEEK_API_KEY

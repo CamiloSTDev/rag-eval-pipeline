@@ -8,6 +8,7 @@ from openai import OpenAI
 
 from rag.application.config import ChunkingConfig, RetrievalConfig
 from rag.application.judge import JudgeAnswer
+from rag.application.reranking import LLMReranker
 from rag.application.retrieval import Retriever
 from rag.application.use_cases.answer_question import AnswerQuestion
 from rag.application.use_cases.evaluate import Evaluate
@@ -53,8 +54,21 @@ def build_answer_question(settings: Settings) -> AnswerQuestion:
         top_k_retrieve=settings.top_k_retrieve,
         top_k_final=settings.top_k_final,
         refusal_threshold=settings.refusal_threshold,
+        rerank_candidates=settings.rerank_candidates,
     )
-    return AnswerQuestion(_retriever(settings, hybrid=settings.use_bm25), _llm(settings), config)
+    reranker = None
+    if settings.use_reranker:
+        reranker = LLMReranker(
+            _chat_llm(
+                settings.reranker_provider,
+                settings.reranker_model,
+                base_url=None,
+                temperature=settings.reranker_temperature,
+                settings=settings,
+            )
+        )
+    retriever = _retriever(settings, hybrid=settings.use_bm25)
+    return AnswerQuestion(retriever, _llm(settings), config, reranker=reranker)
 
 
 def build_index_size(settings: Settings) -> Callable[[], int]:
@@ -140,6 +154,9 @@ def run_config(settings: Settings) -> dict[str, object]:
         "top_k_final": settings.top_k_final,
         "use_bm25": settings.use_bm25,
         "rrf_k": settings.rrf_k,
+        "use_reranker": settings.use_reranker,
+        "reranker_model": settings.reranker_model if settings.use_reranker else None,
+        "rerank_candidates": settings.rerank_candidates if settings.use_reranker else None,
         "refusal_threshold": settings.refusal_threshold,
         "llm_provider": settings.llm_provider,
         "llm_model": settings.llm_model,
