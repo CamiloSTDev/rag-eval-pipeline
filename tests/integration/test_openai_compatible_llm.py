@@ -48,6 +48,17 @@ def test_generate_sends_system_and_user_in_json_mode_and_reports_tokens():
     assert request["temperature"] == 0.0
 
 
+def test_without_temperature_the_parameter_is_not_sent():
+    # Los modelos de razonamiento rechazan cualquier temperatura que no sea la suya, incluso 0
+    completions = StubChatCompletions('{"answer": "Hola.", "refused": false}')
+    client = cast(OpenAI, SimpleNamespace(chat=SimpleNamespace(completions=completions)))
+
+    OpenAICompatibleLLM(client, "modelo-de-razonamiento", temperature=None).generate("r", "p")
+
+    [request] = completions.requests
+    assert request["temperature"] is openai.omit
+
+
 class FailingChatCompletions:
     def create(self, **request: Any) -> SimpleNamespace:
         raise openai.APIConnectionError(request=httpx2.Request("POST", "https://api.example.com"))

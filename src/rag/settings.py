@@ -33,11 +33,14 @@ class Settings(BaseSettings):
     llm_provider: Literal["openai", "deepseek"] = "openai"
     llm_model: str | None = None
     llm_base_url: str | None = None  # solo si quieres otro servidor compatible
+    # "default" = no enviar temperatura: los modelos de razonamiento solo aceptan la suya
+    llm_temperature: float | Literal["default"] = 0.0
     deepseek_api_key: SecretStr | None = None
 
     # Juez de la evaluación: un modelo distinto del que genera. Sin JUDGE_MODEL no hay juez
     judge_provider: Literal["openai", "deepseek"] = "deepseek"
     judge_model: str | None = None
+    judge_temperature: float | Literal["default"] = 0.0
 
     # API: sin clave de administrador, POST /ingest queda desactivado
     admin_api_key: SecretStr | None = None

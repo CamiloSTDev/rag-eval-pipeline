@@ -2,6 +2,7 @@
 
 from collections.abc import Callable
 from pathlib import Path
+from typing import Literal
 
 from openai import OpenAI
 
@@ -76,7 +77,13 @@ def build_judge(settings: Settings) -> JudgeAnswer | None:
             "cambia JUDGE_MODEL o JUDGE_PROVIDER."
         )
     return JudgeAnswer(
-        _chat_llm(settings.judge_provider, settings.judge_model, base_url=None, settings=settings)
+        _chat_llm(
+            settings.judge_provider,
+            settings.judge_model,
+            base_url=None,
+            temperature=settings.judge_temperature,
+            settings=settings,
+        )
     )
 
 
@@ -136,8 +143,10 @@ def run_config(settings: Settings) -> dict[str, object]:
         "refusal_threshold": settings.refusal_threshold,
         "llm_provider": settings.llm_provider,
         "llm_model": settings.llm_model,
+        "llm_temperature": settings.llm_temperature,
         "judge_provider": settings.judge_provider if settings.judge_model else None,
         "judge_model": settings.judge_model,
+        "judge_temperature": settings.judge_temperature if settings.judge_model else None,
     }
 
 
@@ -191,12 +200,21 @@ def _llm(settings: Settings) -> OpenAICompatibleLLM:
             "de tu proveedor."
         )
     return _chat_llm(
-        settings.llm_provider, settings.llm_model, settings.llm_base_url, settings=settings
+        settings.llm_provider,
+        settings.llm_model,
+        settings.llm_base_url,
+        temperature=settings.llm_temperature,
+        settings=settings,
     )
 
 
 def _chat_llm(
-    provider: str, model: str, base_url: str | None, *, settings: Settings
+    provider: str,
+    model: str,
+    base_url: str | None,
+    *,
+    temperature: float | Literal["default"],
+    settings: Settings,
 ) -> OpenAICompatibleLLM:
     """Cliente de chat para el generador o el juez: misma API, cambian la clave y la base_url."""
     if provider == "openai":
@@ -206,4 +224,4 @@ def _chat_llm(
     if key is None:
         raise ConfigurationError(f"Falta {variable} en .env para usar {provider}.")
     client = OpenAI(api_key=key.get_secret_value(), base_url=base_url or _LLM_BASE_URLS[provider])
-    return OpenAICompatibleLLM(client, model)
+    return OpenAICompatibleLLM(client, model, None if temperature == "default" else temperature)

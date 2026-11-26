@@ -8,7 +8,9 @@ from rag.domain.models import LLMResult
 
 
 class OpenAICompatibleLLM:
-    def __init__(self, client: OpenAI, model: str, temperature: float = 0.0) -> None:
+    def __init__(self, client: OpenAI, model: str, temperature: float | None = 0.0) -> None:
+        """`temperature=None` no envía el parámetro: los modelos de razonamiento solo aceptan
+        su valor por defecto y rechazan cualquier otro, incluso 0."""
         # El cliente llega con su clave y su base_url: eso es lo único que cambia entre proveedores
         self._client = client
         self._model = model
@@ -23,7 +25,7 @@ class OpenAICompatibleLLM:
                     {"role": "system", "content": system},
                     {"role": "user", "content": user},
                 ],
-                temperature=self._temperature,
+                temperature=openai.omit if self._temperature is None else self._temperature,
                 # Modo JSON: la respuesta es un JSON válido (DeepSeek pide "json" en el prompt)
                 response_format={"type": "json_object"},
             )
