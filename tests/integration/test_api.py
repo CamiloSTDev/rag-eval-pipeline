@@ -45,6 +45,7 @@ def make_services(
         ingest=lambda: IngestReport(documents=123, chunks=1117),
         indexed_chunks=lambda: len(store.rows),
         config={"embedding_model": "falso", "chunk_tokens": 512},
+        corpus_version="0123456789ab",
         admin_key=admin_key,
     )
 
@@ -116,7 +117,7 @@ def test_ingest_needs_the_admin_key():
     assert (accepted.status_code, accepted.json()) == (200, {"documents": 123, "chunks": 1117})
 
 
-def test_version_reports_the_config_and_a_stable_hash():
+def test_version_reports_the_corpus_the_config_and_a_stable_hash():
     first = call(make_services(), "GET", "/version").json()
     second = call(make_services(), "GET", "/version").json()
 
@@ -124,3 +125,4 @@ def test_version_reports_the_config_and_a_stable_hash():
     assert len(first["config_hash"]) == 12
     assert first["config_hash"] == second["config_hash"]
     assert first["version"] == "0.1.0"
+    assert first["corpus_version"] == "0123456789ab"

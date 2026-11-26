@@ -18,6 +18,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from rag.application.ports import ProviderError
 from rag.application.prompts import InvalidLLMOutput
 from rag.application.use_cases.ingest_corpus import IngestReport
+from rag.domain.corpus import corpus_version
 from rag.domain.models import Answer
 
 
@@ -29,6 +30,7 @@ class ApiServices:
     ingest: Callable[[], IngestReport]
     indexed_chunks: Callable[[], int]
     config: Mapping[str, object]
+    corpus_version: str
     admin_key: str | None
 
 
@@ -72,6 +74,7 @@ class HealthResponse(BaseModel):
 
 class VersionResponse(BaseModel):
     version: str
+    corpus_version: str
     config: dict[str, object]
     config_hash: str
 
@@ -142,6 +145,7 @@ def version(services: Services) -> VersionResponse:
     canonical = json.dumps(config, sort_keys=True, default=str)
     return VersionResponse(
         version=package_version("rag"),
+        corpus_version=services.corpus_version,
         config=config,
         config_hash=hashlib.sha256(canonical.encode()).hexdigest()[:12],
     )
@@ -174,9 +178,11 @@ def _production_services() -> ApiServices:
     ingest_corpus = bootstrap.build_ingest_corpus(settings)
 
     def ingest_and_reload() -> IngestReport:
-        report = ingest_corpus(bootstrap.load_documents(settings))
+        documents = bootstrap.load_documents(settings)
+        report = ingest_corpus(documents)
         # BM25 vive en memoria: se rearma para que también vea los chunks recién ingeridos
         services.answer_question = bootstrap.build_answer_question(settings)
+        services.corpus_version = corpus_version(documents)
         return report
 
     services = ApiServices(
@@ -184,6 +190,7 @@ def _production_services() -> ApiServices:
         ingest=ingest_and_reload,
         indexed_chunks=bootstrap.build_index_size(settings),
         config=bootstrap.run_config(settings),
+        corpus_version=bootstrap.current_corpus_version(settings),
         admin_key=settings.admin_api_key.get_secret_value() if settings.admin_api_key else None,
     )
     return services

@@ -17,6 +17,7 @@ from rag.application.ports import ProviderError
 from rag.application.prompts import InvalidLLMOutput
 from rag.application.use_cases.evaluate import QuestionResult, Summary, summarize
 from rag.application.use_cases.search_chunks import SearchMode
+from rag.domain.corpus import corpus_version
 from rag.domain.models import Answer, RetrievedChunk
 from rag.settings import Settings
 
@@ -79,10 +80,12 @@ def main(argv: Sequence[str] | None = None) -> int:
 def _ingest(settings: Settings) -> None:
     ingest = bootstrap.build_ingest_corpus(settings)
     start = time.perf_counter()
-    report = ingest(bootstrap.load_documents(settings))
+    documents = bootstrap.load_documents(settings)
+    report = ingest(documents)
     print(
         f"{report.documents} documentos -> {report.chunks} chunks en la colección "
-        f"{bootstrap.collection_name(settings)} ({time.perf_counter() - start:.1f} s)"
+        f"{bootstrap.collection_name(settings)} ({time.perf_counter() - start:.1f} s)\n"
+        f"Versión del corpus: {corpus_version(documents)}"
     )
 
 
@@ -140,6 +143,7 @@ def _eval(settings: Settings, name: str, golden: Path | None, holdout: bool) -> 
         "name": name,
         "date": datetime.now().isoformat(timespec="seconds"),
         "split": "holdout" if holdout else "dev",
+        "corpus_version": bootstrap.current_corpus_version(settings),
         "config": bootstrap.run_config(settings),
         "summary": asdict(summary),
     }

@@ -15,6 +15,7 @@ from rag.application.use_cases.evaluate import Evaluate
 from rag.application.use_cases.ingest_corpus import IngestCorpus
 from rag.application.use_cases.search_chunks import SearchChunks, SearchMode
 from rag.domain.chunking import chunk_document
+from rag.domain.corpus import corpus_version
 from rag.domain.models import Document, GoldenQuestion
 from rag.infrastructure.embeddings.openai_embed import OpenAIEmbedder, token_counter
 from rag.infrastructure.golden import GoldenSetError as GoldenSetError
@@ -35,6 +36,12 @@ class ConfigurationError(Exception):
 
 def load_documents(settings: Settings) -> list[Document]:
     return load_corpus(settings.corpus_path, exclude=settings.corpus_exclude)
+
+
+def current_corpus_version(settings: Settings) -> str:
+    """La versión del corpus que hay hoy en disco. Si no coincide con la de la última
+    ingesta, el índice está desactualizado: hay que reingerir."""
+    return corpus_version(load_documents(settings))
 
 
 def build_ingest_corpus(settings: Settings) -> IngestCorpus:
