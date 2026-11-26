@@ -1,0 +1,14 @@
+# docker compose up: construye la imagen, ingiere el corpus si el índice está vacío y levanta
+# la API en http://localhost:8000 (documentación interactiva en /docs).
+# Antes: copia .env.example como .env y pon tu OPENAI_API_KEY.
+services:
+  api:
+    build: .
+    env_file: .env # las claves se leen al arrancar; nunca se copian a la imagen
+    ports:
+      - "8000:8000"
+    volumes:
+      - index:/app/data/index # el índice de Chroma sobrevive a los reinicios
+
+volumes:
+  index:

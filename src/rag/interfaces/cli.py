@@ -29,7 +29,12 @@ class CommandError(Exception):
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="rag", description="Pipeline RAG con evaluación")
     commands = parser.add_subparsers(dest="command", required=True)
-    commands.add_parser("ingest", help="lee el corpus y construye el índice vectorial")
+    ingest = commands.add_parser("ingest", help="lee el corpus y construye el índice vectorial")
+    ingest.add_argument(
+        "--if-empty",
+        action="store_true",
+        help="no hace nada si el índice ya tiene chunks (para el arranque del contenedor)",
+    )
     search = commands.add_parser("search", help="muestra los chunks más parecidos a una consulta")
     search.add_argument("query", help="la pregunta o búsqueda, entre comillas")
     search.add_argument("-k", type=int, default=5, help="cuántos chunks mostrar (por defecto 5)")
@@ -59,7 +64,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     settings = Settings()
     try:
         if args.command == "ingest":
-            _ingest(settings)
+            _ingest(settings, args.if_empty)
         elif args.command == "search":
             _search(settings, args.query, args.k, args.mode)
         elif args.command == "ask":
@@ -77,7 +82,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     return 0
 
 
-def _ingest(settings: Settings) -> None:
+def _ingest(settings: Settings, if_empty: bool = False) -> None:
+    if if_empty and (chunks := bootstrap.build_index_size(settings)()) > 0:
+        # Reingerir no duplica, pero vuelve a pagar los embeddings de todo el corpus
+        print(f"El índice ya tiene {chunks} chunks en {bootstrap.collection_name(settings)}.")
+        return
     ingest = bootstrap.build_ingest_corpus(settings)
     start = time.perf_counter()
     documents = bootstrap.load_documents(settings)

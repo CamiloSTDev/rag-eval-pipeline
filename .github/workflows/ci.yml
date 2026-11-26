@@ -37,3 +37,23 @@ jobs:
       # Los tests no usan claves ni red, salvo tiktoken, que descarga su tokenizador la primera vez
       - name: Tests
         run: uv run pytest -q
+
+  # La imagen se construye y se prueba sin claves: no puede responder preguntas, pero sí
+  # demostrar que trae el paquete, el corpus y el golden set, y que no corre como root.
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Construir la imagen
+        run: docker build -t rag-eval-pipeline .
+
+      - name: El golden set coincide con el corpus de la imagen
+        run: docker run --rm rag-eval-pipeline rag golden
+
+      - name: El contenedor no corre como root
+        run: test "$(docker run --rm rag-eval-pipeline whoami)" = app
+
+      # env_file exige que .env exista; en CI basta uno vacío para validar la sintaxis
+      - name: docker-compose.yml es válido
+        run: touch .env && docker compose config --quiet

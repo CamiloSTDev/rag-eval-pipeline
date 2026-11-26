@@ -1,0 +1,17 @@
+# Lo que no entra al contexto de construcción de la imagen.
+# Los secretos nunca: las claves llegan al contenedor en tiempo de ejecución (env_file).
+.env
+
+# Se regeneran o no hacen falta para servir la API
+.git/
+.github/
+.venv/
+**/__pycache__/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+data/index/
+results/
+tests/
+AGENTS.md
+CLAUDE.md
