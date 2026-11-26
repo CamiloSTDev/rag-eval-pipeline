@@ -14,8 +14,12 @@ class Settings(BaseSettings):
         env_file=".env", env_file_encoding="utf-8", extra="ignore", env_ignore_empty=True
     )
 
+    # Los valores por defecto son la configuración elegida con los experimentos (ver el README):
+    # embeddings large (E5), búsqueda híbrida (E3), reranker (E4) y umbral recalibrado para large.
+    # El baseline E0 es text-embedding-3-small, USE_BM25=false, USE_RERANKER=false y
+    # REFUSAL_THRESHOLD=0 (sin umbral).
     openai_api_key: SecretStr | None = None
-    embedding_model: str = "text-embedding-3-small"
+    embedding_model: str = "text-embedding-3-large"
     chunk_tokens: int = 512
     chunk_overlap: int = 64
     corpus_path: Path = Path("data/raw")
@@ -25,15 +29,18 @@ class Settings(BaseSettings):
     results_path: Path = Path("results")
     top_k_retrieve: int = 30
     top_k_final: int = 5
-    use_bm25: bool = False  # búsqueda híbrida; apagada en el baseline (E0), se prueba en E3
+    use_bm25: bool = True  # búsqueda híbrida (E3)
     rrf_k: int = 60
-    # Reranker con un LLM: apagado en el baseline, se prueba en E4
-    use_reranker: bool = False
+    # Reranker con un LLM (E4)
+    use_reranker: bool = True
     reranker_provider: Literal["openai", "deepseek"] = "openai"
     reranker_model: str = "gpt-4.1-mini"
     reranker_temperature: float | Literal["default"] = 0.0
     rerank_candidates: int = 20
-    refusal_threshold: float | None = None
+    # Calibrado con large, entre la pregunta sin respuesta de menor similitud (0,380) y la con
+    # respuesta de menor similitud (0,499). Cada modelo de embeddings tiene su escala: con small
+    # el umbral seguro era 0,50, que con large rechazaría una pregunta con respuesta
+    refusal_threshold: float | None = 0.45
 
     # Generación: OpenAI usa OPENAI_API_KEY; DeepSeek, DEEPSEEK_API_KEY
     llm_provider: Literal["openai", "deepseek"] = "openai"
