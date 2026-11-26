@@ -1,0 +1,41 @@
+{
+  "name": "E0-provisional",
+  "date": "2026-11-25T20:05:59",
+  "split": "dev",
+  "config": {
+    "collection": "text-embedding-3-small-512-64",
+    "embedding_model": "text-embedding-3-small",
+    "chunk_tokens": 512,
+    "chunk_overlap": 64,
+    "top_k_retrieve": 30,
+    "top_k_final": 5,
+    "use_bm25": false,
+    "rrf_k": 60,
+    "refusal_threshold": null,
+    "llm_provider": "openai",
+    "llm_model": "gpt-4.1-mini",
+    "llm_temperature": 0.0,
+    "judge_provider": "openai",
+    "judge_model": "gpt-6-luna",
+    "judge_temperature": "default"
+  },
+  "summary": {
+    "questions": 36,
+    "errors": 0,
+    "hit_at_5": 0.7,
+    "hit_at_10": 0.8,
+    "mrr": 0.550969089390142,
+    "refusal_accuracy": 0.9722222222222222,
+    "false_refusals": 1,
+    "missed_refusals": 0,
+    "answers_with_invalid_citations": 0,
+    "faithfulness": 0.9291461412151067,
+    "relevance": 0.9655172413793104,
+    "judged": 29,
+    "judge_errors": 0,
+    "latency_p50_ms": 2386.0686998814344,
+    "latency_p95_ms": 3634.1451993212104,
+    "tokens_in_mean": 1023.7222222222222,
+    "tokens_out_mean": 127.97222222222223
+  }
+}
