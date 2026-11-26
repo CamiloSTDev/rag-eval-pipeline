@@ -90,7 +90,9 @@ class GoldenQuestion:
     relevant_sources: tuple[SourceRef, ...]  # vacío en las preguntas sin respuesta
     kind: QuestionKind
     holdout: bool = False  # las de hold-out solo se miran al final, para no sobreajustar
-    verified: bool = False  # una persona revisó la pregunta, la respuesta y sus fuentes
+    # Revisada la pregunta, la respuesta y sus fuentes: por una persona, o por la revisión
+    # independiente que el dueño delegue (cómo se hizo queda en data/PROCEDENCIA.md)
+    verified: bool = False
 
     @property
     def answerable(self) -> bool:

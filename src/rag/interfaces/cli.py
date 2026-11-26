@@ -117,7 +117,7 @@ def _eval(settings: Settings, name: str, golden: Path | None, holdout: bool) -> 
         raise CommandError(f"El golden set no tiene preguntas {group}.")
     unverified = sum(not question.verified for question in questions)
     if unverified:
-        print(f"Atención: {unverified} preguntas sin revisar a mano (verified=false).")
+        print(f"Atención: {unverified} preguntas sin revisar (verified=false).")
     if settings.judge_model:
         print(f"Juez de fidelidad: {settings.judge_provider} / {settings.judge_model}")
     else:
@@ -166,7 +166,7 @@ def _golden(settings: Settings, golden: Path | None, show: bool) -> None:
     print(
         f"Golden set válido: {len(questions)} preguntas ({kinds['single']} de un chunk, "
         f"{kinds['multi']} de varios, {kinds['unanswerable']} sin respuesta), "
-        f"{holdout} de hold-out, {unverified} sin revisar a mano."
+        f"{holdout} de hold-out, {unverified} sin revisar."
     )
 
 
