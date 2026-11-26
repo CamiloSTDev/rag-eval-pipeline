@@ -27,6 +27,8 @@ class QuestionResult:
     invalid_citations: int
     tokens_in: int
     tokens_out: int
+    rerank_tokens_in: int  # 0 sin reranker
+    rerank_tokens_out: int
     latency_ms: float
     answer: str
     # Del juez: None si no hay juez, si la respuesta fue un rechazo o si el juez falló
@@ -56,6 +58,8 @@ class Summary:
     latency_p95_ms: float | None
     tokens_in_mean: float | None
     tokens_out_mean: float | None
+    rerank_tokens_in_mean: float | None
+    rerank_tokens_out_mean: float | None
 
 
 class Evaluate:
@@ -110,6 +114,8 @@ class Evaluate:
             invalid_citations=len(answer.invalid_citations),
             tokens_in=answer.tokens_in,
             tokens_out=answer.tokens_out,
+            rerank_tokens_in=answer.rerank_tokens_in,
+            rerank_tokens_out=answer.rerank_tokens_out,
             latency_ms=sum(answer.latency_ms.values()),
             answer=answer.text,
             faithfulness=judgement.faithfulness if judgement else None,
@@ -144,6 +150,8 @@ def summarize(results: Sequence[QuestionResult]) -> Summary:
         latency_p95_ms=percentile(latencies, 95) if latencies else None,
         tokens_in_mean=_mean([float(r.tokens_in) for r in ok]),
         tokens_out_mean=_mean([float(r.tokens_out) for r in ok]),
+        rerank_tokens_in_mean=_mean([float(r.rerank_tokens_in) for r in ok]),
+        rerank_tokens_out_mean=_mean([float(r.rerank_tokens_out) for r in ok]),
     )
 
 
@@ -164,6 +172,8 @@ def _failed(question: GoldenQuestion, error: str) -> QuestionResult:
         invalid_citations=0,
         tokens_in=0,
         tokens_out=0,
+        rerank_tokens_in=0,
+        rerank_tokens_out=0,
         latency_ms=0.0,
         answer="",
         error=error,

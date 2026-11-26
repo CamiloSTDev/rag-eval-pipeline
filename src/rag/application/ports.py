@@ -2,7 +2,7 @@
 
 from typing import Protocol
 
-from rag.domain.models import Chunk, LLMResult, RetrievedChunk
+from rag.domain.models import Chunk, LLMResult, Reranking, RetrievedChunk
 
 
 class ProviderError(Exception):
@@ -40,10 +40,9 @@ class KeywordIndex(Protocol):
 
 
 class Reranker(Protocol):
-    def rerank(
-        self, query: str, candidates: list[RetrievedChunk], top_n: int
-    ) -> list[RetrievedChunk]:
-        """Vuelve a puntuar los candidatos y devuelve los top_n mejores, ordenados."""
+    def rerank(self, query: str, candidates: list[RetrievedChunk], top_n: int) -> Reranking:
+        """Vuelve a puntuar los candidatos y devuelve los top_n mejores, ordenados, junto con
+        los tokens que gastó."""
         ...
 
 

@@ -4,7 +4,7 @@ import math
 import re
 import zlib
 
-from rag.domain.models import Chunk, LLMResult, RetrievedChunk
+from rag.domain.models import Chunk, LLMResult, Reranking, RetrievedChunk
 
 
 def words(text: str) -> list[str]:
@@ -76,11 +76,10 @@ class FakeKeywordIndex:
 
 
 class FakeReranker:
-    """Puntúa cada candidato con la fracción de palabras de la consulta que contiene."""
+    """Puntúa cada candidato con la fracción de palabras de la consulta que contiene. Como un
+    cross-encoder local, no gasta tokens de un LLM."""
 
-    def rerank(
-        self, query: str, candidates: list[RetrievedChunk], top_n: int
-    ) -> list[RetrievedChunk]:
+    def rerank(self, query: str, candidates: list[RetrievedChunk], top_n: int) -> Reranking:
         terms = set(words(query))
         rescored = [
             RetrievedChunk(
@@ -89,7 +88,8 @@ class FakeReranker:
             )
             for candidate in candidates
         ]
-        return sorted(rescored, key=lambda result: result.score, reverse=True)[:top_n]
+        ranking = sorted(rescored, key=lambda result: result.score, reverse=True)[:top_n]
+        return Reranking(tuple(ranking), tokens_in=0, tokens_out=0)
 
 
 class FakeLLM:

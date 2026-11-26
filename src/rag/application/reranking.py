@@ -9,7 +9,7 @@ from pydantic import BaseModel, ValidationError
 
 from rag.application.ports import LLMClient
 from rag.application.prompts import InvalidLLMOutput
-from rag.domain.models import RetrievedChunk
+from rag.domain.models import Reranking, RetrievedChunk
 
 RERANK_PROMPT = """\
 Ordenas fragmentos de documentación técnica según cuánto ayudan a responder una pregunta.
@@ -31,13 +31,11 @@ class LLMReranker:
     def __init__(self, llm: LLMClient) -> None:
         self._llm = llm
 
-    def rerank(
-        self, query: str, candidates: list[RetrievedChunk], top_n: int
-    ) -> list[RetrievedChunk]:
+    def rerank(self, query: str, candidates: list[RetrievedChunk], top_n: int) -> Reranking:
         """Los candidatos que el modelo eligió, en su orden, y después el resto en el orden
         original: así no se pierde contexto si el modelo omite alguno útil."""
         if not candidates:
-            return []
+            return Reranking(ranking=(), tokens_in=0, tokens_out=0)
         result = self._llm.generate(RERANK_PROMPT, _rerank_prompt(query, candidates))
         try:
             chosen = _Ranking.model_validate_json(result.text).ranking
@@ -50,10 +48,11 @@ class LLMReranker:
                 order.append(n - 1)
         order += [i for i in range(len(candidates)) if i not in order]
         # Puntaje nuevo: solo importa el orden (1 = el primero que eligió el modelo)
-        return [
+        ranking = tuple(
             RetrievedChunk(candidates[i].chunk, score=1 - rank / len(order))
             for rank, i in enumerate(order[:top_n])
-        ]
+        )
+        return Reranking(ranking, tokens_in=result.tokens_in, tokens_out=result.tokens_out)
 
 
 def _rerank_prompt(query: str, candidates: list[RetrievedChunk]) -> str:

@@ -56,6 +56,8 @@ class AskResponse(BaseModel):
     latency_ms: dict[str, float]
     tokens_in: int
     tokens_out: int
+    rerank_tokens_in: int
+    rerank_tokens_out: int
 
 
 class IngestResponse(BaseModel):
@@ -102,6 +104,8 @@ def ask(body: AskRequest, services: Services) -> AskResponse:
         latency_ms=dict(answer.latency_ms),
         tokens_in=answer.tokens_in,
         tokens_out=answer.tokens_out,
+        rerank_tokens_in=answer.rerank_tokens_in,
+        rerank_tokens_out=answer.rerank_tokens_out,
     )
 
 

@@ -56,6 +56,6 @@ def test_reranker_reorders_candidates_and_keeps_top_n():
         RetrievedChunk(make_chunk("medium", "parámetros en general"), score=0.5),
     ]
 
-    results = FakeReranker().rerank("parámetros de query", candidates, top_n=2)
+    results = FakeReranker().rerank("parámetros de query", candidates, top_n=2).ranking
 
     assert [result.chunk.chunk_id for result in results] == ["strong", "medium"]

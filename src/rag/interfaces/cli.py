@@ -192,10 +192,15 @@ def _format_answer(answer: Answer) -> str:
         lines.append(f"Atención: citas sin fuente {numbers}")
     best = "sin resultados" if answer.top_similarity is None else f"{answer.top_similarity:.3f}"
     stages = " · ".join(f"{stage} {ms:.0f} ms" for stage, ms in answer.latency_ms.items())
+    rerank = ""
+    if answer.rerank_tokens_in:
+        rerank = (
+            f" (reranker {answer.rerank_tokens_in} entrada / {answer.rerank_tokens_out} salida)"
+        )
     lines += [
         "",
         f"Mejor similitud vectorial: {best} · tokens {answer.tokens_in} entrada / "
-        f"{answer.tokens_out} salida · {stages}",
+        f"{answer.tokens_out} salida{rerank} · {stages}",
     ]
     return "\n".join(lines)
 
@@ -204,6 +209,12 @@ def _format_summary(summary: Summary) -> str:
     def value(number: float | None, digits: int = 2) -> str:
         return "—" if number is None else f"{number:.{digits}f}"
 
+    rerank = ""
+    if summary.rerank_tokens_in_mean:  # sin reranker es 0: no se muestra
+        rerank = (
+            f" · reranker {value(summary.rerank_tokens_in_mean, 0)} entrada / "
+            f"{value(summary.rerank_tokens_out_mean, 0)} salida"
+        )
     return "\n".join(
         [
             f"Preguntas      {summary.questions} (errores: {summary.errors})",
@@ -219,7 +230,7 @@ def _format_summary(summary: Summary) -> str:
             f"Operación      latencia p50 {value(summary.latency_p50_ms, 0)} ms · p95 "
             f"{value(summary.latency_p95_ms, 0)} ms · tokens promedio "
             f"{value(summary.tokens_in_mean, 0)} entrada / "
-            f"{value(summary.tokens_out_mean, 0)} salida",
+            f"{value(summary.tokens_out_mean, 0)} salida{rerank}",
         ]
     )
 

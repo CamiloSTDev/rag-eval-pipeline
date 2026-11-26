@@ -46,6 +46,15 @@ class LLMResult:
 
 
 @dataclass(frozen=True)
+class Reranking:
+    """El nuevo orden de los candidatos y lo que costó obtenerlo."""
+
+    ranking: tuple[RetrievedChunk, ...]
+    tokens_in: int  # 0 si el reranker no usa un LLM (p. ej., un cross-encoder local)
+    tokens_out: int
+
+
+@dataclass(frozen=True)
 class Answer:
     text: str
     citations: tuple[Citation, ...]
@@ -55,9 +64,11 @@ class Answer:
     retrieved: tuple[RetrievedChunk, ...]
     context: tuple[Chunk, ...]  # las fuentes que vio el modelo, numeradas desde 1
     top_similarity: float | None  # mejor similitud vectorial: la que se compara con el umbral
-    latency_ms: Mapping[str, float]  # por etapa: "retrieve", "generate"
-    tokens_in: int
+    latency_ms: Mapping[str, float]  # por etapa: "retrieve", "rerank", "generate"
+    tokens_in: int  # del generador
     tokens_out: int
+    rerank_tokens_in: int  # 0 sin reranker o si se rechazó antes de llegar a él
+    rerank_tokens_out: int
 
 
 @dataclass(frozen=True)

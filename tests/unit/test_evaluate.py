@@ -29,6 +29,8 @@ def answer(retrieved: tuple[RetrievedChunk, ...], refused: bool = False) -> Answ
         latency_ms={"retrieve": 100.0, "generate": 900.0},
         tokens_in=2000,
         tokens_out=50,
+        rerank_tokens_in=4000,
+        rerank_tokens_out=12,
     )
 
 
@@ -91,6 +93,7 @@ def test_summary_averages_retrieval_over_answerable_questions_only():
     assert (summary.false_refusals, summary.missed_refusals) == (0, 1)
     assert summary.latency_p50_ms == 1000.0
     assert summary.tokens_in_mean == 2000.0
+    assert summary.rerank_tokens_in_mean == 4000.0
 
 
 def test_an_unreadable_model_output_is_recorded_and_left_out_of_the_metrics():

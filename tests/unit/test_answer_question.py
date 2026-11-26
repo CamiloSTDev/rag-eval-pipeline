@@ -6,7 +6,7 @@ from rag.application.config import RetrievalConfig
 from rag.application.prompts import REFUSAL, SYSTEM_PROMPT, InvalidLLMOutput
 from rag.application.retrieval import Retriever
 from rag.application.use_cases.answer_question import AnswerQuestion
-from rag.domain.models import Chunk, Citation
+from rag.domain.models import Chunk, Citation, LLMResult, Reranking
 from tests.fakes import FakeEmbedder, FakeKeywordIndex, FakeLLM, FakeVectorStore
 
 QUERY_CHUNK = Chunk(
@@ -86,22 +86,52 @@ def test_the_model_sees_only_the_first_top_k_final_of_the_ranking():
     assert QUERY_CHUNK.text in user and PATH_CHUNK.text not in user
 
 
+class PreferPath:
+    """Reranker de prueba: pone primero el chunk de path y dice haber gastado 40/3 tokens."""
+
+    def rerank(self, query, candidates, top_n):
+        ranking = sorted(candidates, key=lambda r: r.chunk.chunk_id != "path")[:top_n]
+        return Reranking(tuple(ranking), tokens_in=40, tokens_out=3)
+
+
+def make_reranked(llm: FakeLLM, threshold: float | None = None) -> AnswerQuestion:
+    config = RetrievalConfig(top_k_final=1, refusal_threshold=threshold)
+    retriever = make_retriever([QUERY_CHUNK, PATH_CHUNK])
+    return AnswerQuestion(retriever, llm, config, reranker=PreferPath())
+
+
 def test_the_reranker_decides_which_sources_the_model_sees():
-    class PreferPath:
-        def rerank(self, query, candidates, top_n):
-            return sorted(candidates, key=lambda r: r.chunk.chunk_id != "path")[:top_n]
-
-    llm = FakeLLM()
-    config = RetrievalConfig(top_k_final=1)
-    answer_question = AnswerQuestion(
-        make_retriever([QUERY_CHUNK, PATH_CHUNK]), llm, config, reranker=PreferPath()
-    )
-
-    answer = answer_question(QUESTION)
+    answer = make_reranked(FakeLLM())(QUESTION)
 
     assert [r.chunk for r in answer.retrieved] == [PATH_CHUNK, QUERY_CHUNK]
     assert answer.context == (PATH_CHUNK,)
     assert "rerank" in answer.latency_ms
+
+
+def test_the_reranker_tokens_are_reported_apart_from_the_generator_tokens():
+    class PricedLLM(FakeLLM):
+        def generate(self, system: str, user: str) -> LLMResult:
+            return LLMResult(self.reply, tokens_in=1000, tokens_out=100)
+
+    answer = make_reranked(PricedLLM())(QUESTION)
+
+    assert (answer.tokens_in, answer.tokens_out) == (1000, 100)  # solo el generador
+    assert (answer.rerank_tokens_in, answer.rerank_tokens_out) == (40, 3)
+
+
+def test_a_model_refusal_after_reranking_still_counts_the_reranker_tokens():
+    answer = make_reranked(FakeLLM(reply("No sé.", refused=True)))(QUESTION)
+
+    assert answer.refused
+    assert (answer.rerank_tokens_in, answer.rerank_tokens_out) == (40, 3)
+
+
+def test_a_threshold_refusal_skips_the_reranker_and_costs_nothing():
+    answer = make_reranked(FakeLLM(), threshold=0.99)(QUESTION)
+
+    assert answer.refused
+    assert (answer.tokens_in, answer.rerank_tokens_in) == (0, 0)
+    assert "rerank" not in answer.latency_ms
 
 
 def test_citations_without_a_source_are_reported():
