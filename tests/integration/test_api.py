@@ -83,6 +83,21 @@ def test_empty_or_too_long_questions_are_rejected():
         assert response.status_code == 422, question
 
 
+def test_top_k_must_be_between_1_and_10():
+    for top_k, status in ((0, 422), (11, 422), (1, 200), (10, 200)):
+        body = {"question": "¿Son opcionales?", "top_k": top_k}
+        assert call(make_services(), "POST", "/ask", json=body).status_code == status
+
+
+def test_asking_for_a_reranker_that_is_not_configured_is_422():
+    body = {"question": "¿Son opcionales?", "use_reranker": True}
+
+    response = call(make_services(), "POST", "/ask", json=body)
+
+    assert response.status_code == 422
+    assert "USE_RERANKER" in response.json()["detail"]
+
+
 def test_ask_with_an_empty_index_is_503():
     response = call(make_services(indexed=False), "POST", "/ask", json={"question": "¿Hola?"})
 

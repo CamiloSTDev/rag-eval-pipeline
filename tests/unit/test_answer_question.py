@@ -5,7 +5,7 @@ import pytest
 from rag.application.config import RetrievalConfig
 from rag.application.prompts import REFUSAL, SYSTEM_PROMPT, InvalidLLMOutput
 from rag.application.retrieval import Retriever
-from rag.application.use_cases.answer_question import AnswerQuestion
+from rag.application.use_cases.answer_question import AnswerQuestion, RerankerUnavailable
 from rag.domain.models import Chunk, Citation, LLMResult, Reranking
 from tests.fakes import FakeEmbedder, FakeKeywordIndex, FakeLLM, FakeVectorStore
 
@@ -132,6 +132,29 @@ def test_a_threshold_refusal_skips_the_reranker_and_costs_nothing():
     assert answer.refused
     assert (answer.tokens_in, answer.rerank_tokens_in) == (0, 0)
     assert "rerank" not in answer.latency_ms
+
+
+def test_top_k_changes_how_many_sources_the_model_sees_for_one_question():
+    llm = FakeLLM()
+    answer_question = make_answer_question(llm)  # configurada con top_k_final=2
+
+    answer = answer_question(QUESTION, top_k=1)
+
+    assert len(answer.context) == 1
+    assert len(answer_question(QUESTION).context) == 2  # la configuración no cambió
+
+
+def test_use_reranker_false_skips_the_configured_reranker():
+    answer = make_reranked(FakeLLM())(QUESTION, use_reranker=False)
+
+    assert answer.context == (QUERY_CHUNK,)  # el orden de la búsqueda, sin reordenar
+    assert "rerank" not in answer.latency_ms
+    assert answer.rerank_tokens_in == 0
+
+
+def test_asking_for_a_reranker_that_is_not_configured_fails():
+    with pytest.raises(RerankerUnavailable):
+        make_answer_question(FakeLLM())(QUESTION, use_reranker=True)
 
 
 def test_citations_without_a_source_are_reported():

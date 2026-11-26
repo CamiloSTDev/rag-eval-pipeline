@@ -17,16 +17,16 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from rag.application.ports import ProviderError
 from rag.application.prompts import InvalidLLMOutput
+from rag.application.use_cases.answer_question import AnswerQuestion, RerankerUnavailable
 from rag.application.use_cases.ingest_corpus import IngestReport
 from rag.domain.corpus import corpus_version
-from rag.domain.models import Answer
 
 
 @dataclass
 class ApiServices:
     """Lo que la API necesita, ya armado. En producción lo crea bootstrap; en tests, falsos."""
 
-    answer_question: Callable[[str], Answer]
+    answer_question: AnswerQuestion
     ingest: Callable[[], IngestReport]
     indexed_chunks: Callable[[], int]
     config: Mapping[str, object]
@@ -39,6 +39,9 @@ class AskRequest(BaseModel):
 
     # Límite de largo: una pregunta enorme solo sirve para gastar tokens o inyectar instrucciones
     question: str = Field(min_length=1, max_length=1000)
+    # Opcionales: cambian solo esta pregunta. Más de 10 fuentes sube el costo y el ruido (E2)
+    top_k: int | None = Field(default=None, ge=1, le=10)
+    use_reranker: bool | None = None
 
 
 class CitationOut(BaseModel):
@@ -94,7 +97,11 @@ router = APIRouter()
 def ask(body: AskRequest, services: Services) -> AskResponse:
     _require_index(services)
     try:
-        answer = services.answer_question(body.question)
+        answer = services.answer_question(
+            body.question, top_k=body.top_k, use_reranker=body.use_reranker
+        )
+    except RerankerUnavailable as error:
+        raise HTTPException(422, str(error)) from error
     except (InvalidLLMOutput, ProviderError) as error:
         # 502 Bad Gateway: el error no es de la API ni del cliente, sino del servicio de atrás
         raise HTTPException(502, str(error)) from error

@@ -10,6 +10,10 @@ from rag.domain.citations import resolve_citations
 from rag.domain.models import Answer, Chunk, LLMResult, Reranking, RetrievedChunk
 
 
+class RerankerUnavailable(Exception):
+    """Se pidió el reranker en una instalación que no lo tiene configurado."""
+
+
 class AnswerQuestion:
     def __init__(
         self,
@@ -23,7 +27,16 @@ class AnswerQuestion:
         self._config = config
         self._reranker = reranker
 
-    def __call__(self, question: str) -> Answer:
+    def __call__(
+        self, question: str, *, top_k: int | None = None, use_reranker: bool | None = None
+    ) -> Answer:
+        """`top_k` (cuántas fuentes ve el modelo) y `use_reranker` cambian solo esta pregunta;
+        sin ellos manda la configuración. Con reranker configurado, se usa salvo que se pida no."""
+        if use_reranker and self._reranker is None:
+            raise RerankerUnavailable("El reranker no está configurado: activa USE_RERANKER.")
+        rerank = self._reranker if use_reranker is not False else None
+        top_k_final = self._config.top_k_final if top_k is None else top_k
+
         start = time.perf_counter()
         retrieval = self._retriever(question, self._config.top_k_retrieve)
         latency = {"retrieve": _ms_since(start)}
@@ -34,15 +47,15 @@ class AnswerQuestion:
 
         ranking = retrieval.ranking
         reranking = None
-        if self._reranker is not None:
+        if rerank is not None:
             # Se reordenan solo los primeros candidatos: leer los 30 costaría más y suma poco
             start = time.perf_counter()
             head = ranking[: self._config.rerank_candidates]
-            reranking = self._reranker.rerank(question, head, top_n=len(head))
+            reranking = rerank.rerank(question, head, top_n=len(head))
             ranking = list(reranking.ranking) + ranking[len(head) :]
             latency["rerank"] = _ms_since(start)
 
-        sources = [result.chunk for result in ranking[: self._config.top_k_final]]
+        sources = [result.chunk for result in ranking[:top_k_final]]
         start = time.perf_counter()
         generation = self._llm.generate(SYSTEM_PROMPT, build_user_prompt(question, sources))
         latency["generate"] = _ms_since(start)
