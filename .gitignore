@@ -16,3 +16,7 @@ data/index/
 # Instrucciones locales para agentes de IA
 AGENTS.md
 CLAUDE.md
+.claude/
+
+# Borradores personales (guion de la demo, post)
+notas/
